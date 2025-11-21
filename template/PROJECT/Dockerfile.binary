@@ -17,6 +17,5 @@ ARG TARGETARCH
 # TARGETARCH is "amd64" or "arm64"
 COPY dist/${TARGETOS}-${TARGETARCH}/${APP} /usr/local/bin/${APP}
 
-COPY template /template
 USER $USER
 ENTRYPOINT ["${APP}"]
