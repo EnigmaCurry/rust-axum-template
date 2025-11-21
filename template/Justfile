@@ -15,6 +15,10 @@ TARGET_DIR   := PROJECT_DIR / "target"
 DOCKER       := env_var_or_default("DOCKER", "docker")
 DOCKER_IMAGE := env_var_or_default("DOCKER_IMAGE", "${APP}")
 
+${APP_PREFIX}_LISTEN_IP   := "127.0.0.1"
+${APP_PREFIX}_LISTEN_PORT := "3000"
+
+
 # print help for Just targets
 help:
     @just -l
@@ -138,4 +142,4 @@ build-docker:
     ${DOCKER} build {{PROJECT_DIR}} -t ${DOCKER_IMAGE}
 
 serve: build-docker
-    ${DOCKER} run --rm -it -p 3000:3000 ${DOCKER_IMAGE} serve --listen 0.0.0.0:3000
+    ${DOCKER} run --rm -it -p ${${APP_PREFIX}_LISTEN_PORT}:${${APP_PREFIX}_LISTEN_PORT} ${DOCKER_IMAGE} serve --listen ${${APP_PREFIX}_LISTEN_IP}:${${APP_PREFIX}_LISTEN_PORT}
