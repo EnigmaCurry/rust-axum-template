@@ -70,6 +70,7 @@ $ ${APP}
 Usage: ${APP} [OPTIONS] [COMMAND]
 
 Commands:
+  serve        Run the HTTP API server
   hello        Greeting
   completions  Generates shell completions script (tab completion)
   help         Print this message or the help of the given subcommand(s)
