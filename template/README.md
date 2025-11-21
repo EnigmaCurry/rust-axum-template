@@ -5,7 +5,21 @@
 [![Coverage](https://img.shields.io/badge/Coverage-Report-purple)](https://${GIT_USERNAME}.github.io/${APP}/coverage/master/)
 
 
+## Run Docker container
+
+```
+docker run \
+    -d \
+    -p 3000:3000 \
+    ghcr.io/${GIT_USERNAME}/${APP} \
+    serve \
+    --listen 0.0.0.0:3000
+```
+
 ## Install
+
+If you don't want to run the Docker container, you can install the
+binary directly:
 
 [Download the latest release for your platform.](https://github.com/${GIT_USERNAME}/${APP}/releases)
 
