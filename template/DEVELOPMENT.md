@@ -109,9 +109,9 @@ git push
 
 ### Make a new PR with the changeset
 
-Branch protection is enabled, all changesets must come in the form of
-a Pull Request. On GitHub, create a new Pull Request for the
-`release-{VERSION}` branch into the master branch.
+Branch protection should be enabled, and all changesets should come in
+the form of a Pull Request. On GitHub, create a new Pull Request for
+the `release-{VERSION}` branch into the master branch.
 
 ### Merge the PR and tag the release
 
@@ -126,3 +126,9 @@ just release
 
 New binaries will be automatically built by github actions, and a new
 packaged release will be posted.
+
+## Publish crates to crates.io
+
+In [release.yml](.github/workflows/release.yml) there is a commented
+out section for publishing to crates.io automatically on release.
+Simply uncomment to enable it.
