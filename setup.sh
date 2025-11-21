@@ -16,6 +16,7 @@ export APP=$(
 export GIT_USERNAME=$(git remote get-url origin | sed -E 's/^(https:\/\/|git@github\.com:)([^\/]+).*$/\2/; t; s/.*/username/')
 export GIT_USERNAME=${GIT_USERNAME,,}
 export YEAR=$(date +%Y)
+export APP_PREFIX=${APP^^//[ -]/_}
 check_var APP GIT_USERNAME YEAR
 debug_var APP
 debug_var GIT_USERNAME
@@ -34,7 +35,7 @@ while IFS= read -r -d '' file; do
     mkdir -p "$(dirname "$DEST_PATH")"
 
     # Replace variables using envsubst and copy the file
-    envsubst '${APP} ${GIT_USERNAME} ${YEAR}' < "$file" > "$DEST_PATH"
+    envsubst '${APP} ${APP_PREFIX} ${GIT_USERNAME} ${YEAR}' < "$file" > "$DEST_PATH"
     echo "Processed: $file -> $DEST_PATH"
 done < <(find "$TEMPLATE_DIR" -type f -print0)
 
