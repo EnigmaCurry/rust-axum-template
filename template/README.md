@@ -9,12 +9,15 @@
 
 ```
 docker run \
+    --name ${APP} \
     -d \
     -p 3000:3000 \
     ghcr.io/${GIT_USERNAME}/${APP} \
     serve \
     --listen 0.0.0.0:3000
 ```
+
+The service is now running on your server at port 3000, open your browser to https://${APP}.example.com
 
 ## Install
 
