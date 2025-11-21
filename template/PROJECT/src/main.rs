@@ -37,8 +37,20 @@ fn main() {
     eprintln!("");
     let exit_code = match matches.subcommand() {
         Some(("hello", sub_matches)) => {
-            let name = sub_matches.get_one::<String>("NAME").unwrap();
-            println!("Hello, {name}!");
+            // optional positional arg `name`
+            let arg_name = sub_matches
+                .get_one::<String>("NAME")
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty());
+
+            let env_user = env::var("USER")
+                .or_else(|_| env::var("USERNAME"))
+                .unwrap_or_else(|_| "<unknown>".into());
+
+            let name = arg_name.unwrap_or(env_user.as_str());
+
+            println!("Hello, {name}");
+
             match env::current_dir() {
                 Ok(path) => println!("Current working dir: {}", path.display()),
                 Err(e) => eprintln!("Failed to get current dir: {e}"),
@@ -95,4 +107,24 @@ fn generate_completion_script(shell: clap_complete::shells::Shell) {
         env!("CARGO_BIN_NAME"),
         &mut io::stdout(),
     )
+}
+
+#[test]
+fn run_once_hello_custom_name() {
+    let cmd = cli::app();
+
+    // Use the command's configured name for argv[0]
+    let bin = cmd.get_name().to_string();
+
+    let matches = cmd
+        .clone()
+        .try_get_matches_from(vec![bin, "hello".into(), "Ryan".into()])
+        .unwrap();
+
+    let mut out = Vec::new();
+    let mut err = Vec::new();
+    let code = run_once_with_serve(cmd, matches, |_| Ok(()), &mut out, &mut err);
+
+    assert_eq!(code, 0);
+    assert!(String::from_utf8(out).unwrap().contains("Hello, Ryan!"));
 }

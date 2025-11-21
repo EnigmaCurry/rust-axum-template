@@ -1,11 +1,12 @@
 #!/bin/bash
 
-source template/_scripts/funcs.sh
 # Directory of the script
-ROOT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+ROOT_DIR="$(realpath $(dirname "${BASH_SOURCE[0]}"))"
 TEMPLATE_DIR="$ROOT_DIR/template"
 
 cd ${ROOT_DIR}
+source template/_scripts/funcs.sh
+debug_var ROOT_DIR
 
 # Set variables to be replaced in the template files
 export APP=$(

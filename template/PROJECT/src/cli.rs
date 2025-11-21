@@ -22,9 +22,11 @@ pub fn app() -> Command {
                 .action(clap::ArgAction::SetTrue),
         )
         .subcommand(
-            Command::new("hello")
-                .about("Greeting")
-                .arg(Arg::new("NAME").default_value("Bob")),
+            Command::new("hello").about("Greeting").arg(
+                Arg::new("NAME")
+                    .help("Name to greet (defaults to current user)")
+                    .required(false),
+            ),
         )
         .subcommand(
             Command::new("completions")
