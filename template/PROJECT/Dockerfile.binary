@@ -1,5 +1,5 @@
 # ---- Runtime only --------------------------------------------
-FROM debian:bullseye-slim AS runtime
+FROM debian:trixie-slim AS runtime
 LABEL org.opencontainers.image.source="https://github.com/${GIT_USERNAME}/${APP}"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -7,7 +7,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rm -rf /var/lib/apt/lists/*
 
 ARG USER=appuser UID=1001 GID=1001
-RUN addgroup --gid $GID $USER && adduser --uid $UID --gid $GID --disabled-password --gecos "" $USER
+RUN groupadd --gid "$GID" "$USER" \
+ && useradd  --uid "$UID" \
+             --gid "$GID" \
+             --create-home \
+             --shell /usr/sbin/nologin \
+             "$USER"
 
 # buildx provides TARGETOS/TARGETARCH automatically
 ARG TARGETOS

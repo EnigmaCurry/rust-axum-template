@@ -1,5 +1,5 @@
 # ---- Builder -------------------------------------------------
-FROM rust:1.91-slim-bullseye AS builder
+FROM rust:1.91-slim-trixie AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates git pkg-config libssl-dev && \
     rm -rf /var/lib/apt/lists/*
@@ -10,7 +10,7 @@ COPY . .
 RUN cargo build --release --locked
 
 # ---- Runtime -------------------------------------------------
-FROM debian:bullseye-slim AS runtime
+FROM debian:trixie-slim AS runtime
 LABEL org.opencontainers.image.source="https://github.com/${GIT_USERNAME}/${APP}"
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates && \
