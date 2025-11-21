@@ -16,7 +16,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 ARG USER=appuser UID=1001 GID=1001
-RUN addgroup --gid $GID $USER && adduser --uid $UID --gid $GID --disabled-password --gecos "" $USER
+RUN groupadd --gid "$GID" "$USER" \
+ && useradd  --uid "$UID" \
+             --gid "$GID" \
+             --create-home \
+             --shell /usr/sbin/nologin \
+             "$USER"
+
 COPY --from=builder /app/target/release/${APP} /usr/local/bin/${APP}
 USER $USER
 ENTRYPOINT ["${APP}"]
