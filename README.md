@@ -1,10 +1,15 @@
-# rust-cli-template
+# rust-axum-template
 
-This is my Rust template for new CLI apps.
+This is my Axum template for new Rust projects.
+
+This is a fork of my
+[rust-cli-template](https://github.com/EnigmaCurry/rust-cli-template)
+and this will receive upstream changes from it.
 
 ## Features
 
- * [Just](https://github.com/casey/just) enabled project build targets.
+ * [Just](https://github.com/casey/just) enabled project build
+   targets.
  * [Clap](https://docs.rs/clap/latest/clap/) CLI argument parser.
  * Bash / Fish / Zsh shell (tab)
    [completion](https://docs.rs/clap_complete/latest/clap_complete/).
@@ -14,7 +19,7 @@ This is my Rust template for new CLI apps.
 
 ## Use this template
 
- * [Create a new repository using this template](https://github.com/new?template_name=rust-cli-template).
+ * [Create a new repository using this template](https://github.com/new?template_name=rust-axum-template&template_owner=EnigmaCurry).
  * The `Repository name` that you choose will also be used as your new app's name.
  * If you have enabled code coverage reports (it's on by default), go
    to the GitHub repository `Settings` page:
