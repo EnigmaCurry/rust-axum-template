@@ -1,6 +1,7 @@
 use clap_complete::shells::Shell;
 use std::env;
 use std::io::Write;
+use std::net::SocketAddr;
 
 mod cli;
 mod prelude;
