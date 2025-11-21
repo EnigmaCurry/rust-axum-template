@@ -27,7 +27,7 @@ mime = "0.3.17"
 regex = "1.12.2"
 tempfile = "3.23.0"
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "process", "fs", "signal"] }
-tower = "0.5.2"
+tower = { version = "0.5.2", features = ["trace"] }
 tower-http = "0.6.6"
 
 [dev-dependencies]
