@@ -4,6 +4,7 @@ use std::io::Write;
 
 mod cli;
 mod prelude;
+mod server;
 
 use prelude::*;
 
@@ -57,6 +58,7 @@ where
     match matches.subcommand() {
         Some(("hello", sub_matches)) => hello(sub_matches, out, err),
         Some(("completions", sub_matches)) => completions(sub_matches, out, err),
+        Some(("serve", sub_matches)) => serve(sub_matches, out, err),
         _ => 1,
     }
 }
@@ -153,6 +155,39 @@ fn completions<W1: Write, W2: Write>(
 
 fn generate_completion_script<W: Write>(shell: Shell, out: &mut W) {
     clap_complete::generate(shell, &mut cli::app(), env!("CARGO_BIN_NAME"), out)
+}
+
+fn serve<W1: Write, W2: Write>(sub_matches: &clap::ArgMatches, out: &mut W1, err: &mut W2) -> i32 {
+    let addr_str = sub_matches
+        .get_one::<String>("listen")
+        .map(|s| s.as_str())
+        .unwrap_or("127.0.0.1:3000");
+
+    let addr: SocketAddr = match addr_str.parse() {
+        Ok(a) => a,
+        Err(e) => {
+            let _ = writeln!(err, "Invalid listen addr '{addr_str}': {e}");
+            return 1;
+        }
+    };
+
+    let _ = writeln!(out, "Starting server on http://{addr}");
+
+    let rt = match tokio::runtime::Runtime::new() {
+        Ok(rt) => rt,
+        Err(e) => {
+            let _ = writeln!(err, "Failed to start Tokio runtime: {e}");
+            return 1;
+        }
+    };
+
+    match rt.block_on(server::run(addr)) {
+        Ok(()) => 0,
+        Err(e) => {
+            let _ = writeln!(err, "Server error: {e:#}");
+            1
+        }
+    }
 }
 
 #[test]

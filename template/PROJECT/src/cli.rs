@@ -38,4 +38,13 @@ pub fn app() -> Command {
                         .value_parser(["bash", "zsh", "fish"]),
                 ),
         )
+        .subcommand(
+            Command::new("serve").about("Run the HTTP API server").arg(
+                Arg::new("listen")
+                    .long("listen")
+                    .value_name("ADDR")
+                    .default_value("127.0.0.1:3000")
+                    .help("Address to bind the HTTP server to"),
+            ),
+        )
 }
