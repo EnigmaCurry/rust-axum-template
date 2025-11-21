@@ -52,7 +52,8 @@ self-destruct this README.md and the template.
 just test
 ```
 
-This should build and run the initial tests.
+This will build and run the initial tests. Importantly, this will also
+create teh Cargo.lock file for the first time.
 
 ## Run the program
 
@@ -66,8 +67,8 @@ You can also run the binary directly from
 ## Commit the initial app source files
 
 Once you've verified the tests ran correctly, you can add all of the
-files the template generated into the git repository. Commit and push
-your changes:
+files the template generated, as well as the `Cargo.lock` file, into
+the git repository. Commit and push your changes:
 
 ```
 ## For example:
