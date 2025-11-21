@@ -14,9 +14,12 @@ and this will receive upstream changes from it.
  * [Clap](https://docs.rs/clap/latest/clap/) CLI argument parser.
  * Bash / Fish / Zsh shell (tab)
    [completion](https://docs.rs/clap_complete/latest/clap_complete/).
- * GitHub actions for tests and releases.
- * Test coverage report published to GitHub pages.
- * Publishing to crates.io.
+ * GitHub actions for tests and releases:
+   * Builds executables for multiple platforms.
+   * Builds Docker images for x86_64 and aarch64.
+   * Test coverage report published to GitHub pages.
+   * Publishing crates to crates.io (disabled by default, uncomment in
+   [release.yml](template/.github/workflows/release.yml)).
 
 ## Use this template
 
