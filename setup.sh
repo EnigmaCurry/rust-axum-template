@@ -14,6 +14,7 @@ export APP=$(
     sed -E 's#.*/([^/]+)\.git$#\1#; t; s#.*/([^/]+)$#\1#; t; s#.*#app#'
 )
 export GIT_USERNAME=$(git remote get-url origin | sed -E 's/^(https:\/\/|git@github\.com:)([^\/]+).*$/\2/; t; s/.*/username/')
+export GIT_USERNAME=${GIT_USERNAME,,}
 export YEAR=$(date +%Y)
 check_var APP GIT_USERNAME YEAR
 debug_var APP
