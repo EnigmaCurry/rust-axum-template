@@ -1,11 +1,12 @@
 #!/bin/bash
 
-source template/funcs.sh
 # Directory of the script
-ROOT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+ROOT_DIR="$(realpath $(dirname "${BASH_SOURCE[0]}"))"
 TEMPLATE_DIR="$ROOT_DIR/template"
 
 cd ${ROOT_DIR}
+source template/_scripts/funcs.sh
+debug_var ROOT_DIR
 
 # Set variables to be replaced in the template files
 export APP=$(
@@ -18,6 +19,9 @@ check_var APP GIT_USERNAME YEAR
 debug_var APP
 debug_var GIT_USERNAME
 debug_var YEAR
+
+# Rename PROJECT directory to the same name as the app
+mv "${TEMPLATE_DIR}/PROJECT" "${TEMPLATE_DIR}/${APP}"
 
 # Copy files recursively and replace variables
 while IFS= read -r -d '' file; do
