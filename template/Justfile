@@ -15,8 +15,8 @@ TARGET_DIR   := PROJECT_DIR / "target"
 DOCKER       := env_var_or_default("DOCKER", "docker")
 DOCKER_IMAGE := env_var_or_default("DOCKER_IMAGE", "${APP}")
 
-LISTEN_IP   := "127.0.0.1"
-LISTEN_PORT := "3000"
+LISTEN_IP   := env_var_or_default("LISTEN_IP", "127.0.0.1")
+LISTEN_PORT := env_var_or_default("LISTEN_PORT", "3000")
 
 
 # print help for Just targets
