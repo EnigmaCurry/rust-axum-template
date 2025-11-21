@@ -39,12 +39,24 @@ pub fn app() -> Command {
                 ),
         )
         .subcommand(
-            Command::new("serve").about("Run the HTTP API server").arg(
-                Arg::new("listen")
-                    .long("listen")
-                    .value_name("ADDR")
-                    .default_value("127.0.0.1:3000")
-                    .help("Address to bind the HTTP server to"),
-            ),
+            Command::new("serve")
+                .about("Run the HTTP API server")
+                .arg(
+                    Arg::new("listen_ip")
+                        .long("listen-ip")
+                        .value_name("IP")
+                        .env("LISTEN_IP")
+                        .default_value("127.0.0.1")
+                        .help("IP to bind (or set LISTEN_IP)"),
+                )
+                .arg(
+                    Arg::new("listen_port")
+                        .long("listen-port")
+                        .value_name("PORT")
+                        .env("LISTEN_PORT")
+                        .default_value("3000")
+                        .value_parser(value_parser!(u16))
+                        .help("Port to bind (or set LISTEN_PORT)"),
+                ),
         )
 }
