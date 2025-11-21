@@ -47,7 +47,7 @@ This will render the template files into the project root and then
 self-destruct this README.md and the template.
 
 It will also build and run the initial tests. Importantly, this will
-also create teh Cargo.lock file for the first time.
+also create the Cargo.lock file for the first time.
 
 ## Run the program
 
@@ -55,14 +55,15 @@ also create teh Cargo.lock file for the first time.
 just run [ARGS ...]
 ```
 
-You can also run the binary directly from
+You can also run the binary directly by building manually (`just
+build`) and running the static binary
 `{{app_name}}/target/debug/{{app_name}}`.
 
 ## Commit the initial app source files
 
-Once you've verified the tests ran correctly, you can add all of the
-files the template generated, as well as the `Cargo.lock` file, into
-the git repository. Commit and push your changes:
+Once you've verified that the tests ran correctly, you can add all of
+the files the template generated, as well as the `Cargo.lock` file,
+into the git repository. Commit and push your changes:
 
 ```
 ## For example:
@@ -76,7 +77,7 @@ You're now ready to start developing your application.
 
 ## Releasing your app
 
-When you are ready to release your app, see
-[DEVELOPMENT.md](template/DEVELOPMENT.md), a copy of which has been
-included in your new git repository's root.
+See [DEVELOPMENT.md](template/DEVELOPMENT.md) for instructions on the
+release process, a copy of this file has been included in your new git
+repository's root.
  
