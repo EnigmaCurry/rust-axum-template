@@ -17,7 +17,7 @@ docker run \
     --listen 0.0.0.0:3000
 ```
 
-The service is now running on your server at port 3000, open your browser to https://${APP}.example.com
+The service is now running on your server on port 3000, open your browser to https://${APP}.example.com:3000
 
 ## Install
 
