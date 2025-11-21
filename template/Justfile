@@ -137,3 +137,5 @@ clean-profile:
 build-docker:
     ${DOCKER} build {{PROJECT_DIR}} -t ${DOCKER_IMAGE}
 
+serve: build-docker
+    ${DOCKER} run --rm -it -p 3000:3000 ${DOCKER_IMAGE} serve --listen 0.0.0.0:3000
