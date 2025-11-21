@@ -46,14 +46,8 @@ After cloning the repository to your workstation, you must initialize
 This will render the template files into the project root and then
 self-destruct this README.md and the template.
 
-## Build and run tests
-
-```
-just test
-```
-
-This will build and run the initial tests. Importantly, this will also
-create teh Cargo.lock file for the first time.
+It will also build and run the initial tests. Importantly, this will
+also create teh Cargo.lock file for the first time.
 
 ## Run the program
 
