@@ -7,7 +7,7 @@ GIT_REMOTE      := env_var_or_default("GIT_REMOTE", "origin")
 
 FUNCS_SCRIPT := "./_scripts/funcs.sh"
 APP          := "${APP}"
-PROJECT_DIR  := ROOT / "${APP}"
+PROJECT_DIR  := ROOT / APP
 MANIFEST     := PROJECT_DIR / "Cargo.toml"
 CARGO_TOML   := MANIFEST
 CARGO_LOCK   := PROJECT_DIR / "Cargo.lock"
