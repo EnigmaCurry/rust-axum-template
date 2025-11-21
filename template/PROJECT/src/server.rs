@@ -9,7 +9,7 @@ pub fn router() -> Router {
     Router::new()
         .route("/", get(root))
         .route("/healthz", get(healthz))
-        .route("/hello/:name", get(hello))
+        .route("/hello/{name}", get(hello))
         .fallback(fallback_404)
         // Basic request logging / tracing
         .layer(TraceLayer::new_for_http())
