@@ -1,4 +1,5 @@
 use clap_complete::shells::Shell;
+use std::env;
 
 mod cli;
 mod prelude;
@@ -38,6 +39,10 @@ fn main() {
         Some(("hello", sub_matches)) => {
             let name = sub_matches.get_one::<String>("NAME").unwrap();
             println!("Hello, {name}!");
+            match env::current_dir() {
+                Ok(path) => println!("Current working dir: {}", path.display()),
+                Err(e) => eprintln!("Failed to get current dir: {e}"),
+            };
             0
         }
         Some(("completions", sub_matches)) => {
