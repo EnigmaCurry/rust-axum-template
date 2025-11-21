@@ -14,21 +14,74 @@ This is my Rust template for new CLI apps.
 
 ## Use this template
 
- * [Create a new repository using this template](https://github.com/new?template_name=rust-cli-template&template_owner=EnigmaCurry).
- * The `Repository name` you choose will also be used as your app name.
- * Go to the repository `Settings` page:
-   * Find `Actions`.
-   * Find `General`.
-   * Find `Workflow Permissions`.
-   * Set `Read and Write permissions`.
-   * Click `Save`.
- * Clone your new repository to your workstation.
- 
+ * [Create a new repository using this template](https://github.com/new?template_name=rust-cli-template).
+ * The `Repository name` that you choose will also be used as your new app's name.
+ * If you have enabled code coverage reports (it's on by default), go
+   to the GitHub repository `Settings` page:
+   * Find `Pages`.
+   * Find `Build and deployment`.
+   * Find `Source` and set it to `GitHub Actions`. (**Not** `Deploy
+     from a branch`)
+
+## Clone your new repository to your to your workstation.
+
+```
+## For example:
+
+git clone git@github.com:${USERNAME}/${REPOSITORY}.git \
+   ~/git/vendor/${USERNAME}/${REPOSITORY}
+
+cd ~/git/vendor/${USERNAME}/${REPOSITORY}
+```
+
 ## Render the template
+
+After cloning the repository to your workstation, you must initialize
+ it:
 
 ```
 ./setup.sh
 ```
- 
-This will render the template into the project root and then
+
+This will render the template files into the project root and then
 self-destruct this README.md and the template.
+
+## Build and run tests
+
+```
+just test
+```
+
+This should build and run the initial tests.
+
+## Run the program
+
+```
+just run [ARGS ...]
+```
+
+You can also run the binary directly from
+`{{app_name}}/target/debug/{{app_name}}`.
+
+## Commit the initial app source files
+
+Once you've verified the tests ran correctly, you can add all of the
+files the template generated into the git repository. Commit and push
+your changes:
+
+```
+## For example:
+
+git add .
+git commit -m "init"
+git push
+```
+
+You're now ready to start developing your application.
+
+## Releasing your app
+
+When you are ready to release your app, see
+[DEVELOPMENT.md](template/DEVELOPMENT.md), a copy of which has been
+included in your new git repository's root.
+ 
