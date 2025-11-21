@@ -14,7 +14,7 @@ This is my Rust template for new CLI apps.
 
 ## Use this template
 
- * [Create a new repository using this template](https://github.com/new?template_name=rust-cli-template).
+ * [Create a new repository using this template](https://github.com/new?template_name=rust-cli-template&template_owner=EnigmaCurry).
  * The `Repository name` that you choose will also be used as your new app's name.
  * If you have enabled code coverage reports (it's on by default), go
    to the GitHub repository `Settings` page:
