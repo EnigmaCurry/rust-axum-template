@@ -1,6 +1,7 @@
 # rust-axum-template
 
-This is my Axum template for new Rust projects.
+This is my [Axum](https://github.com/tokio-rs/axum) template for new
+Rust projects.
 
 This is a fork of my
 [rust-cli-template](https://github.com/EnigmaCurry/rust-cli-template)
