@@ -1,4 +1,4 @@
-use clap::{Arg, Command};
+use clap::{value_parser, Arg, Command};
 
 pub fn app() -> Command {
     Command::new("${APP}")

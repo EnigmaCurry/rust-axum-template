@@ -159,8 +159,8 @@ fn generate_completion_script<W: Write>(shell: Shell, out: &mut W) {
 }
 
 fn serve<W1: Write, W2: Write>(sub_matches: &clap::ArgMatches, out: &mut W1, err: &mut W2) -> i32 {
-    let ip = matches.get_one::<String>("listen_ip").unwrap();
-    let port = matches.get_one::<u16>("listen_port").unwrap();
+    let ip = sub_matches.get_one::<String>("listen_ip").unwrap();
+    let port = sub_matches.get_one::<u16>("listen_port").unwrap();
     let addr_str = format!("{ip}:{port}");
 
     let addr: SocketAddr = match addr_str.parse() {
