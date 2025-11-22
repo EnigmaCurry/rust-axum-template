@@ -24,7 +24,7 @@ RUN groupadd --gid "$GID" "$USER" \
              --create-home \
              --shell /usr/sbin/nologin \
              "$USER"
-COPY --from=builder /${APP}/target/release/${APP} /usr/local/bin/${APP}
+COPY --from=builder /app/target/release/${APP} /usr/local/bin/${APP}
 
 RUN mkdir /data && chown ${USER} /data
 VOLUME /data
