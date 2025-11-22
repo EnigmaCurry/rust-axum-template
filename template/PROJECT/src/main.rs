@@ -80,7 +80,7 @@ fn init_logging(matches: &clap::ArgMatches) {
     let mut builder = env_logger::Builder::new();
     builder
         .filter_level(log::LevelFilter::from_str(&log_level).unwrap_or(log::LevelFilter::Info))
-        .format_timestamp(None);
+        .format_timestamp_secs();
 
     // Avoid panicking in tests if a logger is already set.
     let _ = builder.try_init();
