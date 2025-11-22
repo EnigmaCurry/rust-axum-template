@@ -68,6 +68,9 @@ This will copy the provided [.env-dist](template/.env-dist) to `.env`.
 You should edit the generated `.env` file by hand to configure your
 application.
 
+You can set an alternative `.env` file path by setting the `ENV_FILE`
+environment variable.
+
 ## Run the program
 
 ```

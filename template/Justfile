@@ -1,15 +1,18 @@
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 set export
 
+set dotenv-filename := x'${ENV_FILE:-.env}'
 set dotenv-load := true
 set dotenv-required := false
 
+FUNCS_SCRIPT := "./_scripts/funcs.sh"
 ROOT := justfile_directory()
 RUST_LOG        := env_var_or_default("RUST_LOG", "debug")
-RUST_BACKTRACE := env_var_or_default("RUST_BACKTRACE", "1")
+RUST_BACKTRACE  := env_var_or_default("RUST_BACKTRACE", "1")
 GIT_REMOTE      := env_var_or_default("GIT_REMOTE", "origin")
+ENV_FILE        := env_var_or_default("ENV_FILE", ".env")
+ENV_DIST        := env_var_or_default("ENV_DIST", ".env-dist")
 
-FUNCS_SCRIPT := "./_scripts/funcs.sh"
 APP          := "${APP}"
 PROJECT_DIR  := ROOT / APP
 MANIFEST     := PROJECT_DIR / "Cargo.toml"
@@ -20,6 +23,7 @@ TARGET_DIR   := PROJECT_DIR / "target"
 DOCKER       := env_var_or_default("DOCKER", "docker")
 DOCKER_IMAGE := env_var_or_default("DOCKER_IMAGE", "axum-dev-2")
 
+### Container environment :::
 LISTEN_IP   := env_var_or_default("LISTEN_IP", "0.0.0.0")
 LISTEN_PORT := env_var_or_default("LISTEN_PORT", "3000")
 TRAEFIK_HOST := env_var_or_default("TRAEFIK_HOST", "change-me.example.com")
@@ -36,33 +40,54 @@ TRUSTED_FORWARDED_FOR_NAME := env_var_or_default("TRUSTED_FORWARDED_FOR_NAME", "
 help:
     @just -l
 
-# Private: create .env from .env-dist (only config should call this)
 [private]
 _env_init:
-    @if [ -f "{{ROOT}}/.env" ]; then \
-        echo ".env already exists"; \
-        exit 0; \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    env_file="{{ENV_FILE}}"
+    dist_file="{{ENV_DIST}}"
+    # resolve relative paths against ROOT
+    if [[ "$env_file" != /* ]]; then
+      env_path="{{ROOT}}/$env_file"
+    else
+      env_path="$env_file"
     fi
-    @if [ ! -f "{{ROOT}}/.env-dist" ]; then \
-        echo "ERROR: {{ROOT}}/.env-dist not found"; \
-        exit 1; \
+    if [[ "$dist_file" != /* ]]; then
+      dist_path="{{ROOT}}/$dist_file"
+    else
+      dist_path="$dist_file"
     fi
-    cp "{{ROOT}}/.env-dist" "{{ROOT}}/.env"
-    echo "Created {{ROOT}}/.env from .env-dist"
+    if [[ -f "$env_path" ]]; then
+      echo "$env_path already exists"
+      exit 0
+    fi
+    if [[ ! -f "$dist_path" ]]; then
+      echo "ERROR: $dist_path not found"
+      exit 1
+    fi
+    cp "$dist_path" "$env_path"
+    echo "Created $env_path from $dist_path"
     echo "Now re-run your command (dotenv loads on just startup)."
 
-# Private: refuse to run if .env missing
 [private]
 _env_check:
-    @if [ ! -f "{{ROOT}}/.env" ]; then \
-        echo "ERROR: {{ROOT}}/.env is missing."; \
-        echo "Run: just config"; \
-        exit 1; \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    env_file="{{ENV_FILE}}"
+    if [[ "$env_file" != /* ]]; then
+      env_path="{{ROOT}}/$env_file"
+    else
+      env_path="$env_file"
+    fi
+    if [[ ! -f "$env_path" ]]; then
+      echo "ERROR: $env_path is missing."
+      echo "Run: just config ENV_FILE=$env_file"
+      exit 1
     fi
 
-# Bootstrap config
+# Create .env file from .env-dist (can specify ENV_FILE to override path)
 config: _env_init
-    @echo "Config check complete."
+    @echo "Config check complete for {{ENV_FILE}}."
 
 # Install dependencies
 deps:
