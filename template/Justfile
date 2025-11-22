@@ -107,6 +107,22 @@ _with-temp-db +cmd:
     # Run the captured command (from +cmd)
     {{cmd}}
 
+
+_with-temp-db-script script:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    tmp_db="$(mktemp "${TMPDIR:-/tmp}/just-db.XXXXXX.sqlite")"
+    cleanup() { rm -f "$tmp_db" "$tmp_db"-wal "$tmp_db"-shm; }
+    trap cleanup EXIT
+
+    export DATABASE_URL="sqlite://$tmp_db"
+    echo "Using temp DB: $DATABASE_URL"
+
+    just migrate
+
+    bash -c '{{script}}'
+
 # Create .env file from .env-dist (can specify ENV_FILE to override path)
 config: _env_init
     @echo "Config check complete for {{ENV_FILE}}."
@@ -150,27 +166,34 @@ build-watch *args: _env_check
 test *args: _env_check
     just _with-temp-db cargo nextest run --manifest-path "{{MANIFEST}}" {{args}}
 
-# Run tests continuously on file change
-test-watch *args: _env_check
-    just _with-temp-db cargo watch -s 'clear && cargo nextest run --manifest-path "{{MANIFEST}}" {{args}}'
-
 # Run tests with verbose logging
 test-verbose *args: _env_check
     just _with-temp-db env RUST_TEST_THREADS=1 \
         cargo nextest run --manifest-path "{{MANIFEST}}" --nocapture {{args}}
 
+# Run tests continuously on file change
+test-watch *args: _env_check
+    just _with-temp-db-script \
+        'cargo watch -C {{PROJECT_DIR}} -s "clear && cargo nextest run --manifest-path \"{{MANIFEST}}\" {{args}}"'
+
 # Run tests continuously with verbose logging
 test-watch-verbose *args: _env_check
-    just _with-temp-db env RUST_TEST_THREADS=1 \
-        cargo watch -s 'clear && cargo nextest run --manifest-path "{{MANIFEST}}" --nocapture -- {{args}}'
+    just _with-temp-db-script \
+        'RUST_TEST_THREADS=1 cargo watch -C {{PROJECT_DIR}} -s "clear && cargo nextest run --manifest-path \"{{MANIFEST}}\" --nocapture -- {{args}}"'
 
 # Build coverage report
 test-coverage *args: clean _env_check
-    just _with-temp-db bash -lc 'cargo llvm-cov nextest --manifest-path "{{MANIFEST}}" {{args}} && cargo llvm-cov --manifest-path "{{MANIFEST}}" {{args}} report --html'
+    just _with-temp-db-script \
+        'cargo llvm-cov nextest --manifest-path "{{MANIFEST}}" {{args}} && \
+         cargo llvm-cov --manifest-path "{{MANIFEST}}" {{args}} report --html'
 
 # Continuously build coverage report and serve HTTP report
 test-coverage-watch *args: _env_check
-    just _with-temp-db bash -lc 'clear && just test-coverage {{args}} && cd "{{TARGET_DIR}}/llvm-cov/html" && python -m http.server'
+    just _with-temp-db-script \
+        'clear && \
+         just test-coverage {{args}} && \
+         cd "{{TARGET_DIR}}/llvm-cov/html" && \
+         python -m http.server'
 
 # Run Clippy to report and fix lints
 clippy *args: _env_check
