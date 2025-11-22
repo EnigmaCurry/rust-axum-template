@@ -1,5 +1,8 @@
 set export
 
+set dotenv-load := true
+set dotenv-path := ".env"
+
 ROOT := justfile_directory()
 RUST_LOG        := env_var_or_default("RUST_LOG", "debug")
 RUST_BACKTRACE := env_var_or_default("RUST_BACKTRACE", "1")
@@ -21,11 +24,11 @@ LISTEN_PORT := env_var_or_default("LISTEN_PORT", "3000")
 TRAEFIK_HOST := env_var_or_default("TRAEFIK_HOST", "change-me.example.com")
 
 TRUSTED_PROXY := env_var_or_default("TRUSTED_PROXY", "127.0.0.1")
-TRUSTED_HEADER_AUTH := env_var_or_default("TRUSTED_HEADER_AUTH", "false")
+TRUSTED_HEADER_AUTH := false
 TRUSTED_HEADER_NAME := env_var_or_default("TRUSTED_HEADER_NAME", "X-Forwarded-User")
 TRUSTED_HEADER_AUTH_GROUP := env_var_or_default("TRUSTED_HEADER_AUTH_GROUP", "admin")
 
-TRUSTED_FORWARDED_FOR := env_var_or_default("TRUSTED_FORWARDED_FOR", "false")
+TRUSTED_FORWARDED_FOR := false
 TRUSTED_FORWARDED_FOR_NAME := env_var_or_default("TRUSTED_FORWARDED_FOR_NAME", "X-Forwarded-For")
 
 # print help for Just targets
@@ -157,10 +160,10 @@ serve: build-docker
     -e LISTEN_IP \
     -e LISTEN_PORT \
     -e TRUSTED_PROXY \
-    -e TRUSTED_HEADER_AUTH \
     -e TRUSTED_HEADER_NAME \
-    -e TRUSTED_FORWARDED_FOR \
     -e TRUSTED_FORWARDED_FOR_NAME \
+    -e TRUSTED_HEADER_AUTH=true \
+    -e TRUSTED_FORWARDED_FOR=true \
     -l traefik.enable=true \
     -l traefik.http.routers.${APP}.rule=Host\(\`${TRAEFIK_HOST}\`\) \
     -l traefik.http.routers.${APP}.entrypoints=websecure \
@@ -176,10 +179,7 @@ serve-plain: build-docker
     -p ${LISTEN_PORT}:${LISTEN_PORT} \
     -e LISTEN_IP \
     -e LISTEN_PORT \
-    -e TRUSTED_PROXY \
-    -e TRUSTED_HEADER_AUTH \
-    -e TRUSTED_HEADER_NAME \
-    -e TRUSTED_FORWARDED_FOR \
-    -e TRUSTED_FORWARDED_FOR_NAME \
+    -e TRUSTED_HEADER_AUTH=false \
+    -e TRUSTED_FORWARDED_FOR=false \
     ${DOCKER_IMAGE} serve
 
