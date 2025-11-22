@@ -8,11 +8,14 @@ use axum::{
     Extension, Router,
 };
 
-use crate::middleware::{AuthenticatedUser, ClientIp};
+use crate::{
+    middleware::{AuthenticatedUser, ClientIp},
+    AppState,
+};
 
-pub fn router() -> Router {
+pub fn router() -> Router<AppState> {
     // this router is responsible for everything under `/hello`
-    Router::new().route("/", get(whoami_default))
+    Router::<AppState>::new().route("/", get(whoami_default))
 }
 
 async fn whoami_default(

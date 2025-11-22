@@ -1,8 +1,10 @@
 use axum::{extract::Path, routing::get, Router};
 
-pub fn router() -> Router {
+use crate::AppState;
+
+pub fn router() -> Router<AppState> {
     // this router is responsible for everything under `/hello`
-    Router::new()
+    Router::<AppState>::new()
         .route("/{name}", get(hello))
         .route("/", get(hello_default))
 }

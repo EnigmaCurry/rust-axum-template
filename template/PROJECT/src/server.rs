@@ -1,9 +1,12 @@
 use std::net::SocketAddr;
 
+use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
+
 use crate::{
     middleware::{TrustedForwardedForConfig, TrustedHeaderAuthConfig},
     prelude::*,
     routes::router,
+    AppState,
 };
 
 /// Run the HTTP server until shutdown.
@@ -12,7 +15,26 @@ pub async fn run(
     user_cfg: TrustedHeaderAuthConfig,
     fwd_cfg: TrustedForwardedForConfig,
 ) -> anyhow::Result<()> {
-    let app = router(user_cfg, fwd_cfg);
+    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:data.db".to_string());
+    let db: SqlitePool = SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect(&db_url)
+        .await?;
+    // Optional but recommended for SQLite:
+    sqlx::query("PRAGMA foreign_keys = ON;")
+        .execute(&db)
+        .await?;
+    sqlx::query("PRAGMA journal_mode = WAL;")
+        .execute(&db)
+        .await?;
+
+    // Run migrations
+    sqlx::migrate!().run(&db).await?;
+
+    // Shared state
+    let state = AppState { db };
+
+    let app = router(user_cfg, fwd_cfg).with_state(state);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     let bound_addr = listener.local_addr()?;

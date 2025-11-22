@@ -24,6 +24,7 @@ DOCKER       := env_var_or_default("DOCKER", "docker")
 DOCKER_IMAGE := env_var_or_default("DOCKER_IMAGE", "axum-dev-2")
 
 ### Container environment :::
+DATABASE_URL := env_var_or_default("DATABASE_URL", "sqlite:data.db")
 LISTEN_IP   := env_var_or_default("LISTEN_IP", "0.0.0.0")
 LISTEN_PORT := env_var_or_default("LISTEN_PORT", "3000")
 TRAEFIK_HOST := env_var_or_default("TRAEFIK_HOST", "change-me.example.com")
@@ -211,6 +212,7 @@ build-docker: _env_check
 serve: _env_check build-docker
     ${DOCKER} run --rm -it \
     --name ${APP} \
+    -e DATABASE_URL \
     -e LISTEN_IP \
     -e LISTEN_PORT \
     -e TRUSTED_PROXY \
@@ -231,9 +233,15 @@ serve-plain: _env_check build-docker
     ${DOCKER} run --rm -it \
     --name ${APP} \
     -p ${LISTEN_PORT}:${LISTEN_PORT} \
+    -e DATABASE_URL \
     -e LISTEN_IP \
     -e LISTEN_PORT \
     -e TRUSTED_HEADER_AUTH=false \
     -e TRUSTED_FORWARDED_FOR=false \
     ${DOCKER_IMAGE} serve
 
+# Apply database migrations
+migrate: _env_check
+    echo DATABASE_URL=${DATABASE_URL}
+    cd {{PROJECT_DIR}} && sqlx database create
+    cd {{PROJECT_DIR}} && sqlx migrate run

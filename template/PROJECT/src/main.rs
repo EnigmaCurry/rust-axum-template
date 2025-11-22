@@ -1,15 +1,24 @@
 use axum::http::HeaderName;
 use clap_complete::shells::Shell;
+use sqlx::SqlitePool;
 use std::env;
 use std::io::Write;
 use std::net::{IpAddr, SocketAddr};
 
 mod cli;
+mod errors;
 mod middleware;
+mod models;
 mod prelude;
 mod routes;
 mod server;
+
 use prelude::*;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub db: SqlitePool,
+}
 
 fn main() {
     let code = run_cli(
