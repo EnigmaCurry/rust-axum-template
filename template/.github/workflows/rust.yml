@@ -68,6 +68,10 @@ jobs:
         working-directory: ${{ env.PROJECT_DIR }}
         run: just bin-deps
 
+      - name: Configure .env file
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: just config
+
       ## Don't build. just let the coverage report build it.
       # - name: Build
       #   working-directory: ${{ env.PROJECT_DIR }}
