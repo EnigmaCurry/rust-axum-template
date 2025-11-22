@@ -43,3 +43,4 @@ echo "Template render complete!"
 rm -rf template setup.sh
 just config test
 git add .
+git add -f .env-dist
