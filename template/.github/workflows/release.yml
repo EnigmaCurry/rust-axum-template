@@ -35,7 +35,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('${{ env.PROJECT_DIR }}/Cargo.lock.no-version') }}
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('${APP}/Cargo.lock.no-version') }}
           restore-keys: |
             ${{ runner.os }}-cargo-registry-
 
