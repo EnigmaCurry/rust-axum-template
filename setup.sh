@@ -41,5 +41,5 @@ done < <(find "$TEMPLATE_DIR" -type f -print0)
 
 echo "Template render complete!"
 rm -rf template setup.sh
-just test
+just config test
 git add .
