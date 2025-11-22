@@ -41,6 +41,10 @@ done < <(find "$TEMPLATE_DIR" -type f -print0)
 
 echo "Template render complete!"
 rm -rf template setup.sh
+
+## Set temporary database for build purposes only:
+export DATABASE_URL="sqlite://$(mktemp)"
 just config test
+
 git add .
 git add -f .env-dist
