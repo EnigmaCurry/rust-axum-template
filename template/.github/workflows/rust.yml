@@ -64,6 +64,13 @@ jobs:
         working-directory: ${{ env.PROJECT_DIR }}
         run: cargo binstall --no-confirm just
 
+      - name: Install sqlx-cli (cached)
+        uses: taiki-e/cache-cargo-install-action@v2
+        with:
+          tool: sqlx-cli@0.8.6
+          locked: true
+          features: "sqlite"
+
       - name: Install other dependencies listed in Justfile (bin-deps)
         working-directory: ${{ env.PROJECT_DIR }}
         run: just bin-deps
