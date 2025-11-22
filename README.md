@@ -58,6 +58,16 @@ self-destruct this README.md and the template.
 It will also build and run the initial tests. Importantly, this will
 also create the Cargo.lock file for the first time.
 
+## Configure the .env file
+
+```
+just config
+```
+
+This will copy the provided [.env-dist](template/.env-dist) to `.env`.
+You should edit the generated `.env` file by hand to configure your
+application.
+
 ## Run the program
 
 ```
