@@ -5,10 +5,20 @@ use std::io::Write;
 use std::net::{IpAddr, SocketAddr};
 
 mod cli;
+mod middleware;
 mod prelude;
+mod routes;
 mod server;
-
 use prelude::*;
+
+fn main() {
+    let code = run_cli(
+        std::env::args_os(),
+        &mut std::io::stdout(),
+        &mut std::io::stderr(),
+    );
+    std::process::exit(code);
+}
 
 pub fn run_cli<I, S, W1, W2>(args: I, out: &mut W1, err: &mut W2) -> i32
 where
@@ -27,15 +37,6 @@ where
     };
 
     dispatch(cmd, matches, out, err)
-}
-
-fn main() {
-    let code = run_cli(
-        std::env::args_os(),
-        &mut std::io::stdout(),
-        &mut std::io::stderr(),
-    );
-    std::process::exit(code);
 }
 
 fn dispatch<W1, W2>(
@@ -58,7 +59,6 @@ where
     }
 
     match matches.subcommand() {
-        Some(("hello", sub_matches)) => hello(sub_matches, out, err),
         Some(("completions", sub_matches)) => completions(sub_matches, out, err),
         Some(("serve", sub_matches)) => serve(sub_matches, out, err),
         _ => 1,
@@ -86,32 +86,6 @@ fn init_logging(matches: &clap::ArgMatches) {
     let _ = builder.try_init();
 
     debug!("logging initialized.");
-}
-
-fn hello<W1: Write, W2: Write>(sub_matches: &clap::ArgMatches, out: &mut W1, err: &mut W2) -> i32 {
-    let arg_name = sub_matches
-        .get_one::<String>("NAME")
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty());
-
-    let env_user = env::var("USER")
-        .or_else(|_| env::var("USERNAME"))
-        .unwrap_or_else(|_| "<unknown>".into());
-
-    let name = arg_name.unwrap_or(env_user.as_str());
-
-    let _ = writeln!(out, "Hello, {name}!");
-
-    match env::current_dir() {
-        Ok(path) => {
-            let _ = writeln!(out, "Current working dir: {}", path.display());
-        }
-        Err(e) => {
-            let _ = writeln!(err, "Failed to get current dir: {e}");
-        }
-    }
-
-    0
 }
 
 fn completions<W1: Write, W2: Write>(
@@ -190,7 +164,7 @@ fn serve<W1: Write, W2: Write>(sub_matches: &clap::ArgMatches, out: &mut W1, err
 
     let trusted_proxy = *sub_matches.get_one::<IpAddr>("trusted_proxy").unwrap();
 
-    let auth_cfg = server::TrustedHeaderAuthConfig {
+    let auth_cfg = middleware::TrustedHeaderAuthConfig {
         enabled,
         header_name,
         trusted_proxy,
@@ -222,10 +196,10 @@ fn serve<W1: Write, W2: Write>(sub_matches: &clap::ArgMatches, out: &mut W1, err
         }
     };
 
-    let fwd_cfg = server::TrustedForwardedForConfig {
+    let fwd_cfg = middleware::TrustedForwardedForConfig {
         enabled: fwd_enabled,
         header_name: fwd_header_name,
-        trusted_proxy: trusted_proxy,
+        trusted_proxy,
     };
 
     if fwd_enabled {
@@ -254,14 +228,36 @@ fn serve<W1: Write, W2: Write>(sub_matches: &clap::ArgMatches, out: &mut W1, err
     }
 }
 
-#[test]
-fn run_once_hello_custom_name() {
-    let mut out = Vec::new();
-    let mut err = Vec::new();
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
 
-    let code = crate::run_cli(["test-bin", "hello", "Ryan"], &mut out, &mut err);
+    #[test]
+    fn help_prints_when_no_subcommand() {
+        // Capture stdout/stderr
+        let mut out = Vec::new();
+        let mut err = Vec::new();
 
-    assert_eq!(code, 0);
-    assert!(String::from_utf8(out).unwrap().contains("Hello, Ryan!"));
-    assert!(err.is_empty());
+        // Run with just the bin name => no subcommand => help on stdout
+        let code = run_cli(["app"], &mut out, &mut err);
+
+        assert_eq!(code, 0, "expected exit code 0 when printing help");
+        assert!(
+            err.is_empty(),
+            "expected no stderr output, got: {}",
+            String::from_utf8_lossy(&err)
+        );
+
+        let actual = String::from_utf8(out).expect("stdout should be valid utf8");
+
+        // Build expected help text the same way dispatch does.
+        let mut expected_buf = Vec::new();
+        let mut cmd = crate::cli::app();
+        cmd.write_help(&mut expected_buf).unwrap();
+        writeln!(&mut expected_buf).unwrap(); // dispatch adds a newline after help
+        let expected = String::from_utf8(expected_buf).unwrap();
+
+        assert_eq!(actual, expected);
+    }
 }
