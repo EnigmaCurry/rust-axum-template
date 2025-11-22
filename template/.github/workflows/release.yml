@@ -59,6 +59,23 @@ jobs:
           echo "${{ steps.get_version.outputs.VERSION }}"
           exit 1
 
+      # Create a temp sqlite DB, run migrations, export DATABASE_URL for later steps
+      - name: Create CI sqlite db + migrate
+        shell: bash
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          set -euo pipefail
+
+          # put the temp DB inside the repo so cross container can see it
+          DB_PATH="$(mktemp -p "$PWD" sqlx-ci-XXXX.db)"
+
+          # SQLx sqlite URL; absolute paths become sqlite:////abs/... which sqlx accepts
+          export DATABASE_URL="sqlite://$DB_PATH"
+          echo "DATABASE_URL=$DATABASE_URL" >> "$GITHUB_ENV"
+
+          cargo sqlx database create
+          cargo sqlx migrate run
+
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
         with:
