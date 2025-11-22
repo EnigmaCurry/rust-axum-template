@@ -13,7 +13,7 @@ RUN sqlx database create && sqlx migrate run && cargo build --release --locked
 
 # ---- Runtime -------------------------------------------------
 FROM debian:trixie-slim AS runtime
-LABEL org.opencontainers.image.source="https://github.com/username/app"
+LABEL org.opencontainers.image.source="https://github.com/${GIT_USERNAME}/${APP}"
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates coreutils && \
     rm -rf /var/lib/apt/lists/*
@@ -24,10 +24,10 @@ RUN groupadd --gid "$GID" "$USER" \
              --create-home \
              --shell /usr/sbin/nologin \
              "$USER"
-COPY --from=builder /app/target/release/app /usr/local/bin/app
+COPY --from=builder /${APP}/target/release/${APP} /usr/local/bin/${APP}
 
 RUN mkdir /data && chown ${USER} /data
 VOLUME /data
 USER $USER
 
-ENTRYPOINT ["app"]
+ENTRYPOINT ["${APP}"]
