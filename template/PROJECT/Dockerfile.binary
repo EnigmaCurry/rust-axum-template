@@ -1,9 +1,9 @@
 # ---- Runtime only --------------------------------------------
 FROM debian:trixie-slim AS runtime
-LABEL org.opencontainers.image.source="https://github.com/${GIT_USERNAME}/${APP}"
+LABEL org.opencontainers.image.source="https://github.com/username/app"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates && \
+        ca-certificates coreutils && \
     rm -rf /var/lib/apt/lists/*
 
 ARG USER=appuser UID=1001 GID=1001
@@ -20,7 +20,10 @@ ARG TARGETARCH
 
 # Map buildx arch names to your dist folder names
 # TARGETARCH is "amd64" or "arm64"
-COPY dist/${TARGETOS}-${TARGETARCH}/${APP} /usr/local/bin/${APP}
+COPY dist/${TARGETOS}-${TARGETARCH}/app /usr/local/bin/app
 
+RUN mkdir /data && chown ${USER} /data
+VOLUME /data
 USER $USER
-ENTRYPOINT ["${APP}"]
+
+ENTRYPOINT ["app"]

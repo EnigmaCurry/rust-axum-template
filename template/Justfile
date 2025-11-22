@@ -21,10 +21,11 @@ CARGO_LOCK   := PROJECT_DIR / "Cargo.lock"
 TARGET_DIR   := PROJECT_DIR / "target"
 
 DOCKER       := env_var_or_default("DOCKER", "docker")
-DOCKER_IMAGE := env_var_or_default("DOCKER_IMAGE", "axum-dev-2")
+DOCKER_IMAGE := env_var_or_default("DOCKER_IMAGE", "rust-axum-template")
+DOCKER_VOLUME := env_var_or_default("DOCKER_VOLUME", "rust-axum-template")
 
 ### Container environment :::
-DATABASE_URL := env_var_or_default("DATABASE_URL", "sqlite:data.db")
+DATABASE_URL := env_var_or_default("DATABASE_URL", "sqlite:///data/data.db")
 LISTEN_IP   := env_var_or_default("LISTEN_IP", "0.0.0.0")
 LISTEN_PORT := env_var_or_default("LISTEN_PORT", "3000")
 TRAEFIK_HOST := env_var_or_default("TRAEFIK_HOST", "change-me.example.com")
@@ -98,6 +99,7 @@ deps:
     cargo install --locked cargo-nextest
     cargo install --locked git-cliff
     cargo install --locked cargo-llvm-cov
+    cargo install --locked sqlx-cli --no-default-features --features sqlite
     @echo
     @echo "All dependencies have been installed."
     @echo
@@ -207,11 +209,13 @@ clean-profile:
 # Build docker image
 build-docker: _env_check
     ${DOCKER} build {{PROJECT_DIR}} -t ${DOCKER_IMAGE}
+    echo "Tagged updated image ${DOCKER_IMAGE}"
 
 # Serve the app with Traefik and ForwardAuth
 serve: _env_check build-docker
     ${DOCKER} run --rm -it \
     --name ${APP} \
+    -v ${DOCKER_VOLUME}:/data \
     -e DATABASE_URL \
     -e LISTEN_IP \
     -e LISTEN_PORT \
@@ -232,6 +236,7 @@ serve: _env_check build-docker
 serve-plain: _env_check build-docker
     ${DOCKER} run --rm -it \
     --name ${APP} \
+    -v ${DOCKER_VOLUME}:/data \
     -p ${LISTEN_PORT}:${LISTEN_PORT} \
     -e DATABASE_URL \
     -e LISTEN_IP \

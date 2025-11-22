@@ -5,15 +5,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo fetch
+RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo fetch && \
+    cargo install --locked sqlx-cli --no-default-features --features sqlite
 COPY . .
-RUN cargo build --release --locked
+ENV DATABASE_URL=sqlite:test.db
+RUN sqlx database create && sqlx migrate run && cargo build --release --locked
 
 # ---- Runtime -------------------------------------------------
 FROM debian:trixie-slim AS runtime
-LABEL org.opencontainers.image.source="https://github.com/${GIT_USERNAME}/${APP}"
+LABEL org.opencontainers.image.source="https://github.com/username/app"
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates && \
+        ca-certificates coreutils && \
     rm -rf /var/lib/apt/lists/*
 ARG USER=appuser UID=1001 GID=1001
 RUN groupadd --gid "$GID" "$USER" \
@@ -22,6 +24,10 @@ RUN groupadd --gid "$GID" "$USER" \
              --create-home \
              --shell /usr/sbin/nologin \
              "$USER"
-COPY --from=builder /app/target/release/${APP} /usr/local/bin/${APP}
+COPY --from=builder /app/target/release/app /usr/local/bin/app
+
+RUN mkdir /data && chown ${USER} /data
+VOLUME /data
 USER $USER
-ENTRYPOINT ["${APP}"]
+
+ENTRYPOINT ["app"]

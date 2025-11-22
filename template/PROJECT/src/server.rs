@@ -16,10 +16,12 @@ pub async fn run(
     fwd_cfg: TrustedForwardedForConfig,
 ) -> anyhow::Result<()> {
     let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:data.db".to_string());
+    info!("DATABASE_URL={db_url}");
     let db: SqlitePool = SqlitePoolOptions::new()
         .max_connections(5)
         .connect(&db_url)
         .await?;
+    info!("Loaded database connection pool");
     // Optional but recommended for SQLite:
     sqlx::query("PRAGMA foreign_keys = ON;")
         .execute(&db)
