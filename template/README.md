@@ -20,6 +20,14 @@ docker run \
 
 The service is now running on your server on port 3000, open your browser to https://${APP}.example.com:3000
 
+To view status and logs:
+
+```
+docker ps -f name=${APP}
+
+docker logs ${APP}
+```
+
 ## Install
 
 If you don't want to run the Docker container, you can install the
