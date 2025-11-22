@@ -14,7 +14,8 @@ docker run \
     -p 3000:3000 \
     ghcr.io/${GIT_USERNAME}/${APP} \
     serve \
-    --listen 0.0.0.0:3000
+    --listen-ip 0.0.0.0 \
+    --listen-port 3000
 ```
 
 The service is now running on your server on port 3000, open your browser to https://${APP}.example.com:3000
