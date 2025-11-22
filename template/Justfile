@@ -14,11 +14,19 @@ CARGO_LOCK   := PROJECT_DIR / "Cargo.lock"
 TARGET_DIR   := PROJECT_DIR / "target"
 
 DOCKER       := env_var_or_default("DOCKER", "docker")
-DOCKER_IMAGE := env_var_or_default("DOCKER_IMAGE", "${APP}")
+DOCKER_IMAGE := env_var_or_default("DOCKER_IMAGE", "axum-dev-2")
 
-LISTEN_IP   := env_var_or_default("LISTEN_IP", "127.0.0.1")
+LISTEN_IP   := env_var_or_default("LISTEN_IP", "0.0.0.0")
 LISTEN_PORT := env_var_or_default("LISTEN_PORT", "3000")
+TRAEFIK_HOST := env_var_or_default("TRAEFIK_HOST", "change-me.example.com")
 
+TRUSTED_PROXY := env_var_or_default("TRUSTED_PROXY", "127.0.0.1")
+TRUSTED_HEADER_AUTH := env_var_or_default("TRUSTED_HEADER_AUTH", "false")
+TRUSTED_HEADER_NAME := env_var_or_default("TRUSTED_HEADER_NAME", "X-Forwarded-User")
+TRUSTED_HEADER_AUTH_GROUP := env_var_or_default("TRUSTED_HEADER_AUTH_GROUP", "admin")
+
+TRUSTED_FORWARDED_FOR := env_var_or_default("TRUSTED_FORWARDED_FOR", "false")
+TRUSTED_FORWARDED_FOR_NAME := env_var_or_default("TRUSTED_FORWARDED_FOR_NAME", "X-Forwarded-For")
 
 # print help for Just targets
 help:
@@ -142,9 +150,36 @@ clean-profile:
 build-docker:
     ${DOCKER} build {{PROJECT_DIR}} -t ${DOCKER_IMAGE}
 
+# Serve the app with Traefik and ForwardAuth
 serve: build-docker
     ${DOCKER} run --rm -it \
-    -p ${LISTEN_PORT}:${LISTEN_PORT} \
-    -e LISTEN_IP=${LISTEN_IP} \
-    -e LISTEN_PORT=${LISTEN_PORT} \
+    --name ${APP} \
+    -e LISTEN_IP \
+    -e LISTEN_PORT \
+    -e TRUSTED_PROXY \
+    -e TRUSTED_HEADER_AUTH \
+    -e TRUSTED_HEADER_NAME \
+    -e TRUSTED_FORWARDED_FOR \
+    -e TRUSTED_FORWARDED_FOR_NAME \
+    -l traefik.enable=true \
+    -l traefik.http.routers.${APP}.rule=Host\(\`${TRAEFIK_HOST}\`\) \
+    -l traefik.http.routers.${APP}.entrypoints=websecure \
+    -l traefik.http.routers.${APP}.tls=true \
+    -l traefik.http.services.${APP}.loadbalancer.server.port=${LISTEN_PORT} \
+    -l traefik.http.routers.${APP}.middlewares=traefik-forward-auth@docker,header-authorization-group-${TRUSTED_HEADER_AUTH_GROUP}@file \
     ${DOCKER_IMAGE} serve
+
+# Serve the app by itself without Traefik
+serve-plain: build-docker
+    ${DOCKER} run --rm -it \
+    --name ${APP} \
+    -p ${LISTEN_PORT}:${LISTEN_PORT} \
+    -e LISTEN_IP \
+    -e LISTEN_PORT \
+    -e TRUSTED_PROXY \
+    -e TRUSTED_HEADER_AUTH \
+    -e TRUSTED_HEADER_NAME \
+    -e TRUSTED_FORWARDED_FOR \
+    -e TRUSTED_FORWARDED_FOR_NAME \
+    ${DOCKER_IMAGE} serve
+

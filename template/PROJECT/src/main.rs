@@ -1,7 +1,8 @@
+use axum::http::HeaderName;
 use clap_complete::shells::Shell;
 use std::env;
 use std::io::Write;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 
 mod cli;
 mod prelude;
@@ -171,6 +172,69 @@ fn serve<W1: Write, W2: Write>(sub_matches: &clap::ArgMatches, out: &mut W1, err
         }
     };
 
+    // ---- Trusted USER header options ----
+    let enabled = sub_matches.get_flag("trusted_header_auth");
+
+    let header_name_str = sub_matches
+        .get_one::<String>("trusted_header_name")
+        .map(|s| s.as_str())
+        .unwrap_or("X-Forwarded-User");
+
+    let header_name = match HeaderName::from_bytes(header_name_str.as_bytes()) {
+        Ok(h) => h,
+        Err(e) => {
+            let _ = writeln!(err, "Invalid header name '{header_name_str}': {e}");
+            return 1;
+        }
+    };
+
+    let trusted_proxy = *sub_matches.get_one::<IpAddr>("trusted_proxy").unwrap();
+
+    let auth_cfg = server::TrustedHeaderAuthConfig {
+        enabled,
+        header_name,
+        trusted_proxy,
+    };
+
+    if enabled {
+        let _ = writeln!(
+            out,
+            "Trusted USER header enabled: header='{header_name_str}', trusted_proxy={trusted_proxy}"
+        );
+    }
+
+    // ---- Trusted FORWARDED-FOR (client IP) options ----
+    let fwd_enabled = sub_matches.get_flag("trusted_forwarded_for");
+
+    let fwd_header_str = sub_matches
+        .get_one::<String>("forwarded_for_header_name")
+        .map(|s| s.as_str())
+        .unwrap_or("X-Forwarded-For");
+
+    let fwd_header_name = match HeaderName::from_bytes(fwd_header_str.as_bytes()) {
+        Ok(h) => h,
+        Err(e) => {
+            let _ = writeln!(
+                err,
+                "Invalid forwarded-for header name '{fwd_header_str}': {e}"
+            );
+            return 1;
+        }
+    };
+
+    let fwd_cfg = server::TrustedForwardedForConfig {
+        enabled: fwd_enabled,
+        header_name: fwd_header_name,
+        trusted_proxy: trusted_proxy,
+    };
+
+    if fwd_enabled {
+        let _ = writeln!(
+            out,
+            "Trusted FORWARDED-FOR enabled: header='{fwd_header_str}', trusted_proxy={trusted_proxy}"
+        );
+    }
+
     let _ = writeln!(out, "Starting server on http://{addr}");
 
     let rt = match tokio::runtime::Runtime::new() {
@@ -181,7 +245,7 @@ fn serve<W1: Write, W2: Write>(sub_matches: &clap::ArgMatches, out: &mut W1, err
         }
     };
 
-    match rt.block_on(server::run(addr)) {
+    match rt.block_on(server::run(addr, auth_cfg, fwd_cfg)) {
         Ok(()) => 0,
         Err(e) => {
             let _ = writeln!(err, "Server error: {e:#}");
