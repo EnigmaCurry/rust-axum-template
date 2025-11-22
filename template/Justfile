@@ -25,11 +25,11 @@ LISTEN_PORT := env_var_or_default("LISTEN_PORT", "3000")
 TRAEFIK_HOST := env_var_or_default("TRAEFIK_HOST", "change-me.example.com")
 
 TRUSTED_PROXY := env_var_or_default("TRUSTED_PROXY", "127.0.0.1")
-TRUSTED_HEADER_AUTH := false
+TRUSTED_HEADER_AUTH := "false"
 TRUSTED_HEADER_NAME := env_var_or_default("TRUSTED_HEADER_NAME", "X-Forwarded-User")
 TRUSTED_HEADER_AUTH_GROUP := env_var_or_default("TRUSTED_HEADER_AUTH_GROUP", "admin")
 
-TRUSTED_FORWARDED_FOR := false
+TRUSTED_FORWARDED_FOR := "false"
 TRUSTED_FORWARDED_FOR_NAME := env_var_or_default("TRUSTED_FORWARDED_FOR_NAME", "X-Forwarded-For")
 
 # print help for Just targets
