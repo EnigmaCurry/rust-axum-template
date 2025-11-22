@@ -59,6 +59,13 @@ jobs:
           echo "${{ steps.get_version.outputs.VERSION }}"
           exit 1
 
+      - name: Install sqlx-cli (cached)
+        uses: taiki-e/cache-cargo-install-action@v2
+        with:
+          tool: sqlx-cli@0.8.6
+          locked: true
+          features: "sqlite"
+      
       # Create a temp sqlite DB, run migrations, export DATABASE_URL for later steps
       - name: Create CI sqlite db + migrate
         shell: bash
