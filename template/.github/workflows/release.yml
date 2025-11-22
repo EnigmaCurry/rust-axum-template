@@ -73,8 +73,8 @@ jobs:
           export DATABASE_URL="sqlite://$DB_PATH"
           echo "DATABASE_URL=$DATABASE_URL" >> "$GITHUB_ENV"
 
-          cargo sqlx database create
-          cargo sqlx migrate run
+          sqlx database create
+          sqlx migrate run
 
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
