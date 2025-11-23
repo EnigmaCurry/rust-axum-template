@@ -75,7 +75,7 @@ The service should now be running.
 On standalone installs, it should be on port 3000. Open your browser
 to the domain name or IP address associated with your server:
 
-https://${APP}.example.com:3000
+http://${APP}.example.com:3000
 
 For Traefik installs, it should be on port 443, and you must use the
 same domain name that was configured for the Traefik route
@@ -100,56 +100,6 @@ Or install via cargo ([crates.io/crates/${APP}](https://crates.io/crates/${APP})
 
 ```
 cargo install ${APP}
-```
-
-### Tab completion
-
-To install tab completion support, put this in your `~/.bashrc` (assuming you use Bash):
-
-```
-### Bash completion for ${APP} (Put this in ~/.bashrc)
-source <(${APP} completions bash)
-```
-
-If you don't like to type out the full name `${APP}`, you can make
-a shorter alias (`h`), as well as enable tab completion for the alias
-(`h`):
-
-```
-### Alias ${APP} as h (Put this in ~/.bashrc):
-alias h=${APP}
-complete -F _${APP} -o bashdefault -o default h
-```
-
-Completion for Zsh and/or Fish has also been implemented, but the
-author has not tested this:
-
-```
-### Zsh completion for ${APP} (Put this in ~/.zshrc):
-autoload -U compinit; compinit; source <(${APP} completions zsh)
-
-### Fish completion for ${APP} (Put this in ~/.config/fish/config.fish):
-${APP} completions fish | source
-```
-
-## Usage
-
-```
-$ ${APP}
-
-Usage: ${APP} [OPTIONS] [COMMAND]
-
-Commands:
-  serve        Run the HTTP API server
-  hello        Greeting
-  completions  Generates shell completions script (tab completion)
-  help         Print this message or the help of the given subcommand(s)
-
-Options:
-      --log <LEVEL>  Sets the log level, overriding the RUST_LOG environment variable. [possible values: trace, debug, info, warn, error]
-  -v                 Sets the log level to debug.
-  -h, --help         Print help
-  -V, --version      Print version
 ```
 
 ## Development
