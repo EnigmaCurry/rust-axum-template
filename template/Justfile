@@ -156,11 +156,11 @@ run *args: _env_check
 
 # Build + args
 build *args: _env_check
-    RUSTFLAGS="-D warnings" cargo build --manifest-path "{{MANIFEST}}" {{args}}
+    RUSTFLAGS="-D warnings" just _with-temp-db cargo build --manifest-path "{{MANIFEST}}" {{args}}
 
 # Build continuously on file change
 build-watch *args: _env_check
-    cargo watch -s "clear && cargo build --manifest-path {{MANIFEST}} {{args}}"
+    cd "{{APP}}" && cargo watch -s "clear && just _with-temp-db cargo build --manifest-path {{MANIFEST}} {{args}}"
 
 # Run tests
 test *args: _env_check
