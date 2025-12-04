@@ -168,11 +168,11 @@ build-watch *args: _env_check
     cd "{{APP}}" && cargo watch -s "clear && just _with-temp-db cargo build --manifest-path {{MANIFEST}} {{args}}"
 
 # Run tests
-test *args: _env_check
+test *args: _env_check build-frontend
     just _with-temp-db cargo nextest run --manifest-path "{{MANIFEST}}" {{args}}
 
 # Run tests with verbose logging
-test-verbose *args: _env_check
+test-verbose *args: _env_check build-frontend
     just _with-temp-db env RUST_TEST_THREADS=1 \
         cargo nextest run --manifest-path "{{MANIFEST}}" --nocapture {{args}}
 
@@ -187,7 +187,7 @@ test-watch-verbose *args: _env_check
         'RUST_TEST_THREADS=1 cargo watch -C ${APP} -s "clear && cargo nextest run --manifest-path \"{{MANIFEST}}\" --nocapture -- {{args}}"'
 
 # Build coverage report
-test-coverage *args: clean _env_check
+test-coverage *args: clean _env_check build-frontend
     just _with-temp-db-script \
         'cargo llvm-cov nextest --manifest-path "{{MANIFEST}}" {{args}} && \
          cargo llvm-cov --manifest-path "{{MANIFEST}}" {{args}} report --html'
@@ -258,6 +258,7 @@ clean-profile:
 # Build svelte frontend
 build-frontend: _env_check
     cd frontend && \
+    ${NPM} install && \
     ${NPM} build
 
 # Build docker image
