@@ -16,7 +16,7 @@ ENV_DIST        := env_var_or_default("ENV_DIST", ".env-dist")
 CARGO_PROFILE   := env_var_or_default("CARGO_PROFILE","release")
 
 APP          := "${APP}"
-PROJECT_DIR  := ROOT / "{{APP}}"
+PROJECT_DIR  := ROOT / APP
 MANIFEST     := PROJECT_DIR / "Cargo.toml"
 CARGO_TOML   := MANIFEST
 CARGO_LOCK   := PROJECT_DIR / "Cargo.lock"
@@ -179,12 +179,12 @@ test-verbose *args: _env_check
 # Run tests continuously on file change
 test-watch *args: _env_check
     just _with-temp-db-script \
-        'cargo watch -C {{PROJECT_DIR}} -s "clear && cargo nextest run --manifest-path \"{{MANIFEST}}\" {{args}}"'
+        'cargo watch -C ${APP} -s "clear && cargo nextest run --manifest-path \"{{MANIFEST}}\" {{args}}"'
 
 # Run tests continuously with verbose logging
 test-watch-verbose *args: _env_check
     just _with-temp-db-script \
-        'RUST_TEST_THREADS=1 cargo watch -C {{PROJECT_DIR}} -s "clear && cargo nextest run --manifest-path \"{{MANIFEST}}\" --nocapture -- {{args}}"'
+        'RUST_TEST_THREADS=1 cargo watch -C ${APP} -s "clear && cargo nextest run --manifest-path \"{{MANIFEST}}\" --nocapture -- {{args}}"'
 
 # Build coverage report
 test-coverage *args: clean _env_check
