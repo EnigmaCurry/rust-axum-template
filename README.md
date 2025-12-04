@@ -43,7 +43,7 @@ This is ALPHA software in-development.
    * Find `Source` and set it to `GitHub Actions`. (**Not** `Deploy
      from a branch`)
 
-## Clone your new repository to your to your workstation.
+## Clone your new repository to your workstation.
 
 ```
 ## For example:
