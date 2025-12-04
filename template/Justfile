@@ -9,9 +9,11 @@ FUNCS_SCRIPT := "./_scripts/funcs.sh"
 ROOT := justfile_directory()
 RUST_LOG        := env_var_or_default("RUST_LOG", "debug")
 RUST_BACKTRACE  := env_var_or_default("RUST_BACKTRACE", "1")
+RUST_LIB_BACKTRACE  := env_var_or_default("RUST_LIB_BACKTRACE", "1")
 GIT_REMOTE      := env_var_or_default("GIT_REMOTE", "origin")
 ENV_FILE        := env_var_or_default("ENV_FILE", ".env")
 ENV_DIST        := env_var_or_default("ENV_DIST", ".env-dist")
+CARGO_PROFILE   := env_var_or_default("CARGO_PROFILE","release")
 
 APP          := "${APP}"
 PROJECT_DIR  := ROOT / APP
@@ -20,18 +22,23 @@ CARGO_TOML   := MANIFEST
 CARGO_LOCK   := PROJECT_DIR / "Cargo.lock"
 TARGET_DIR   := PROJECT_DIR / "target"
 
+NPM          := env_var_or_default("NPM", "pnpm")
 DOCKER       := env_var_or_default("DOCKER", "docker")
 DOCKER_IMAGE := env_var_or_default("DOCKER_IMAGE", "rust-axum-template")
 DOCKER_VOLUME := env_var_or_default("DOCKER_VOLUME", "rust-axum-template")
 
+## Local database path (NOT used by docker)
+DATABASE_PATH := env_var_or_default("DATABASE_PATH", "data.db")
+DATABASE_URL := "sqlite://" + DATABASE_PATH
+
 ### Container environment :::
-DATABASE_URL := env_var_or_default("DATABASE_URL", "sqlite:///data/data.db")
 LISTEN_IP   := env_var_or_default("LISTEN_IP", "0.0.0.0")
 LISTEN_PORT := env_var_or_default("LISTEN_PORT", "3000")
-TRAEFIK_HOST := env_var_or_default("TRAEFIK_HOST", "change-me.example.com")
+APP_HOST := env_var_or_default("APP_HOST", "change-me.example.com")
 
 TRUSTED_PROXY := env_var_or_default("TRUSTED_PROXY", "127.0.0.1")
-TRUSTED_HEADER_AUTH := "false"
+# Set auth method: username_password or forward_auth
+AUTHENTICATION_METHOD := env_var_or_default("AUTHENTICATION_METHOD", "username_password")
 TRUSTED_HEADER_NAME := env_var_or_default("TRUSTED_HEADER_NAME", "X-Forwarded-User")
 TRUSTED_HEADER_AUTH_GROUP := env_var_or_default("TRUSTED_HEADER_AUTH_GROUP", "admin")
 
@@ -100,7 +107,6 @@ _with-temp-db +cmd:
     trap cleanup EXIT
 
     export DATABASE_URL="sqlite://$tmp_db"
-    echo "Using temp DB: $DATABASE_URL"
 
     just migrate
 
@@ -117,7 +123,6 @@ _with-temp-db-script script:
     trap cleanup EXIT
 
     export DATABASE_URL="sqlite://$tmp_db"
-    echo "Using temp DB: $DATABASE_URL"
 
     just migrate
 
@@ -155,34 +160,34 @@ run *args: _env_check
     cargo run --manifest-path "{{MANIFEST}}" -- {{args}}
 
 # Build + args
-build *args: _env_check
-    RUSTFLAGS="-D warnings" just _with-temp-db cargo build --manifest-path "{{MANIFEST}}" {{args}}
+build *args: _env_check build-frontend
+    just _with-temp-db cargo build --manifest-path "{{MANIFEST}}" {{args}}
 
 # Build continuously on file change
 build-watch *args: _env_check
     cd "{{APP}}" && cargo watch -s "clear && just _with-temp-db cargo build --manifest-path {{MANIFEST}} {{args}}"
 
 # Run tests
-test *args: _env_check
+test *args: _env_check build-frontend
     just _with-temp-db cargo nextest run --manifest-path "{{MANIFEST}}" {{args}}
 
 # Run tests with verbose logging
-test-verbose *args: _env_check
+test-verbose *args: _env_check build-frontend
     just _with-temp-db env RUST_TEST_THREADS=1 \
         cargo nextest run --manifest-path "{{MANIFEST}}" --nocapture {{args}}
 
 # Run tests continuously on file change
 test-watch *args: _env_check
     just _with-temp-db-script \
-        'cargo watch -C {{PROJECT_DIR}} -s "clear && cargo nextest run --manifest-path \"{{MANIFEST}}\" {{args}}"'
+        'cargo watch -C ${APP} -s "clear && cargo nextest run --manifest-path \"{{MANIFEST}}\" {{args}}"'
 
 # Run tests continuously with verbose logging
 test-watch-verbose *args: _env_check
     just _with-temp-db-script \
-        'RUST_TEST_THREADS=1 cargo watch -C {{PROJECT_DIR}} -s "clear && cargo nextest run --manifest-path \"{{MANIFEST}}\" --nocapture -- {{args}}"'
+        'RUST_TEST_THREADS=1 cargo watch -C ${APP} -s "clear && cargo nextest run --manifest-path \"{{MANIFEST}}\" --nocapture -- {{args}}"'
 
 # Build coverage report
-test-coverage *args: clean _env_check
+test-coverage *args: clean _env_check build-frontend
     just _with-temp-db-script \
         'cargo llvm-cov nextest --manifest-path "{{MANIFEST}}" {{args}} && \
          cargo llvm-cov --manifest-path "{{MANIFEST}}" {{args}} report --html'
@@ -250,17 +255,33 @@ clean *args: clean-profile
 clean-profile:
     rm -rf {{PROJECT_DIR}}/*.profraw {{PROJECT_DIR}}/*.profdata
 
+# Build svelte frontend
+build-frontend: _env_check
+    cd frontend && \
+    ${NPM} install && \
+    ${NPM} build
+
 # Build docker image
 build-docker: _env_check
-    ${DOCKER} build {{PROJECT_DIR}} -t ${DOCKER_IMAGE}
+    ${DOCKER} build -f {{APP}}/Dockerfile -t ${DOCKER_IMAGE} --build-arg CARGO_PROFILE="{{CARGO_PROFILE}}" .
     echo "Tagged updated image ${DOCKER_IMAGE}"
 
-# Serve the app with Traefik and ForwardAuth
-serve: _env_check build-docker
+# Serve the app by itself as a standalone binary
+serve *args: _env_check build
+    cd {{PROJECT_DIR}} && \
+    TRUSTED_FORWARDED_FOR=false \
+    DATABASE_URL={{DATABASE_URL}} \
+    just run serve {{args}}
+
+# Serve the app in Docker with Traefik and ForwardAuth
+serve-docker: _env_check build-docker
     ${DOCKER} run --rm -it \
-    --name ${APP} \
+    --name {{APP}} \
     -v ${DOCKER_VOLUME}:/data \
-    -e DATABASE_URL \
+    -e AUTHENTICATION_METHOD=forward_auth \
+    -e RUST_LOG \
+    -e RUST_BACKTRACE \
+    -e RUST_LIB_BACKTRACE \
     -e LISTEN_IP \
     -e LISTEN_PORT \
     -e TRUSTED_PROXY \
@@ -268,29 +289,64 @@ serve: _env_check build-docker
     -e TRUSTED_FORWARDED_FOR_NAME \
     -e TRUSTED_HEADER_AUTH=true \
     -e TRUSTED_FORWARDED_FOR=true \
+    -e SESSION_EXPIRY_SECONDS \
+    -e SESSION_CHECK_SECONDS \
     -l traefik.enable=true \
-    -l traefik.http.routers.${APP}.rule=Host\(\`${TRAEFIK_HOST}\`\) \
-    -l traefik.http.routers.${APP}.entrypoints=websecure \
-    -l traefik.http.routers.${APP}.tls=true \
-    -l traefik.http.services.${APP}.loadbalancer.server.port=${LISTEN_PORT} \
-    -l traefik.http.routers.${APP}.middlewares=traefik-forward-auth@docker,header-authorization-group-${TRUSTED_HEADER_AUTH_GROUP}@file \
+    -l traefik.http.routers.{{APP}}.rule=Host\(\`${APP_HOST}\`\) \
+    -l traefik.http.routers.{{APP}}.entrypoints=websecure \
+    -l traefik.http.routers.{{APP}}.tls=true \
+    -l traefik.http.services.{{APP}}.loadbalancer.server.port=${LISTEN_PORT} \
+    -l "traefik.http.routers.{{APP}}-login.rule=Host(\`${APP_HOST}\`) && PathPrefix(\`/login\`)" \
+    -l traefik.http.routers.{{APP}}-login.entrypoints=websecure \
+    -l traefik.http.routers.{{APP}}-login.tls=true \
+    -l traefik.http.routers.{{APP}}-login.service={{APP}} \
+    -l traefik.http.routers.{{APP}}-login.middlewares=traefik-forward-auth@docker,header-authorization-group-${TRUSTED_HEADER_AUTH_GROUP}@file \
     ${DOCKER_IMAGE} serve
 
-# Serve the app by itself without Traefik
-serve-plain: _env_check build-docker
+# Serve the app in Docker without Traefik
+serve-docker-plain: _env_check build-docker
     ${DOCKER} run --rm -it \
-    --name ${APP} \
+    --name {{APP}} \
     -v ${DOCKER_VOLUME}:/data \
     -p ${LISTEN_PORT}:${LISTEN_PORT} \
-    -e DATABASE_URL \
+    -e AUTHENTICATION_METHOD=username_password \
+    -e SESSION_SECURE=false \
+    -e RUST_LOG \
+    -e RUST_BACKTRACE \
+    -e RUST_LIB_BACKTRACE \
     -e LISTEN_IP \
     -e LISTEN_PORT \
-    -e TRUSTED_HEADER_AUTH=false \
+    -e SESSION_EXPIRY_SECONDS \
+    -e SESSION_CHECK_SECONDS \
     -e TRUSTED_FORWARDED_FOR=false \
     ${DOCKER_IMAGE} serve
 
-# Apply database migrations
+# Apply database migrations in local database
 migrate: _env_check
-    echo DATABASE_URL=${DATABASE_URL}
-    cd {{PROJECT_DIR}} && sqlx database create
-    cd {{PROJECT_DIR}} && sqlx migrate run
+    cd {{PROJECT_DIR}} && \
+    sqlx database create && \
+    sqlx migrate run
+
+# Enter sqlite shell of local database
+sql:
+    cd {{APP}} && sqlite3 {{DATABASE_PATH}}
+
+# Enter sqlite shell of docker database
+sql-docker:
+    ${DOCKER} exec -it {{APP}} sqlite3 /data/data.db
+
+destroy:
+    rm -f {{PROJECT_DIR}}/{{DATABASE_PATH}}
+
+destroy-docker:
+    docker rm -fv {{APP}}
+    docker volume rm -f {{DOCKER_VOLUME}}
+
+shell:
+    docker exec -it {{APP}} /bin/bash
+
+insert-test-data:
+    cd {{PROJECT_DIR}} && sqlite3 {{DATABASE_PATH}} < test_data/ryan_user.sql
+
+dev: migrate insert-test-data serve
+

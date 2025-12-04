@@ -7,8 +7,19 @@ This is a fork of my
 [rust-cli-template](https://github.com/EnigmaCurry/rust-cli-template)
 and this will receive upstream changes from it.
 
+This is ALPHA software in-development.
+
 ## Features
 
+ * Builds a single binary containing API server and SvelteKit frontend.
+ * Restful JSON API.
+ * Embedded SQLite database.
+ * OpenAPI specification and Scalar test interface for the API.
+ * Multiple user authentication backends:
+   * Username / Password
+   * Forward Auth via trusted header (Traefik Proxy or compatible proxy layer)
+   * Todo: OAuth (OIDC)
+ * Admin web interface.
  * [Just](https://github.com/casey/just) enabled project build
    targets.
  * [Clap](https://docs.rs/clap/latest/clap/) CLI argument parser.

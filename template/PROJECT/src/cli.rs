@@ -1,7 +1,8 @@
+use crate::middleware::auth::AuthenticationMethod;
 use clap::{value_parser, Arg, Command};
 
 pub fn app() -> Command {
-    Command::new("${APP}")
+    Command::new("axum-dev")
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
         .about(env!("CARGO_PKG_DESCRIPTION"))
@@ -52,11 +53,58 @@ pub fn app() -> Command {
                         .help("Port to bind (or set LISTEN_PORT)"),
                 )
                 .arg(
-                    Arg::new("trusted_header_auth")
-                        .long("trusted-header-auth")
-                        .env("TRUSTED_HEADER_AUTH")
-                        .action(clap::ArgAction::SetTrue)
-                        .help("Enable trusting an auth header from a forward-auth proxy"),
+                    Arg::new("database_url")
+                        .long("database-url")
+                        .value_name("URL")
+                        .env("DATABASE_URL")
+                        .default_value("sqlite:data.db")
+                        .help("Database URL for sqlx (or set DATABASE_URL)"),
+                )
+                .arg(
+                    Arg::new("session_secure")
+                        .long("session-secure")
+                        .value_name("BOOL")
+                        .env("SESSION_SECURE")
+                        .value_parser(value_parser!(bool))
+                        .default_value("true")
+                        .help(
+                            "Whether to set the Secure flag on session cookies \
+                             (true/false or set SESSION_SECURE=true/false)",
+                        ),
+                )
+                .arg(
+                    Arg::new("session_check_seconds")
+                        .long("session-check-seconds")
+                        .value_name("SECONDS")
+                        .env("SESSION_CHECK_SECONDS")
+                        .value_parser(value_parser!(u64))
+                        .default_value("60")
+                        .help(
+                            "Session inactivity timeout in seconds \
+                             (default every 60 seconds, or set SESSION_CHECK_SECONDS)",
+                        ),
+                )
+                .arg(
+                    Arg::new("session_expiry_seconds")
+                        .long("session-expiry-seconds")
+                        .value_name("SECONDS")
+                        .env("SESSION_EXPIRY_SECONDS")
+                        .value_parser(value_parser!(u64))
+                        .default_value("604800") // 7 days
+                        .help(
+                            "Session inactivity timeout in seconds \
+                             (default 604800 = 7 days, or set SESSION_EXPIRY_SECONDS)",
+                        ),
+                )
+                .arg(
+                    Arg::new("authentication_method")
+                        .long("authentication-method")
+                        .env("AUTHENTICATION_METHOD")
+                        .value_name("METHOD")
+                        .num_args(1)
+                        .value_parser(value_parser!(AuthenticationMethod))
+                        .default_value("forward_auth")
+                        .help("Authentication method to use: forward_auth or username_password"),
                 )
                 .arg(
                     Arg::new("trusted_header_name")

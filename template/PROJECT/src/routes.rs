@@ -1,52 +1,73 @@
-use axum::{http::StatusCode, middleware, routing::get, Router};
-use tower_http::trace::TraceLayer;
+use aide::{axum::ApiRouter, openapi::OpenApi};
+use axum::{http::StatusCode, middleware, routing::get, Extension, Router};
+use std::sync::Arc;
+use tower_http::{services::ServeDir, trace::TraceLayer};
 
 use crate::{
+    api_docs::{configure_openapi, docs_routes},
     middleware::{
-        trusted_forwarded_for, trusted_header_auth, TrustedForwardedForConfig,
-        TrustedHeaderAuthConfig,
+        admin_only::admin_only_middleware, csrf_protection, trusted_forwarded_for,
+        trusted_header_auth, user_session::user_session_middleware,
     },
     AppState,
 };
 
+pub mod admin;
+pub mod api;
+pub mod healthz;
 pub mod hello;
+pub mod login;
 pub mod user;
 pub mod whoami;
 
-/// Build your Axum router. Keep this as a separate function so it’s testable.
 pub fn router(
-    user_cfg: TrustedHeaderAuthConfig,
-    fwd_cfg: TrustedForwardedForConfig,
+    hdr_auth_cfg: trusted_header_auth::AuthConfig,
+    fwd_for_cfg: trusted_forwarded_for::TrustedForwardedForConfig,
+    state: AppState,
 ) -> Router<AppState> {
-    let app = Router::<AppState>::new()
-        .route("/", get(root))
-        .route("/healthz", get(healthz))
-        .nest("/hello", hello::router())
-        .nest("/whoami", whoami::router())
-        .nest("/user", user::router())
-        .fallback(fallback_404)
-        .layer(TraceLayer::new_for_http());
+    let user_api = ApiRouter::<AppState>::new()
+        .nest("/api", api::router())
+        .layer(middleware::from_fn(csrf_protection::csrf_middleware));
 
-    // Always install both middlewares; they self-disable and
-    // reject spoofing when disabled.
-    app.layer(middleware::from_fn_with_state(
-        fwd_cfg,
-        trusted_forwarded_for,
-    ))
-    .layer(middleware::from_fn_with_state(
-        user_cfg,
-        trusted_header_auth,
-    ))
+    let login_api =
+        login::router(hdr_auth_cfg).layer(middleware::from_fn(csrf_protection::csrf_middleware));
+
+    let admin_api = ApiRouter::<AppState>::new()
+        .nest("/admin", admin::router())
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            admin_only_middleware,
+        ))
+        .layer(middleware::from_fn(csrf_protection::csrf_middleware));
+
+    let mut api_spec = OpenApi::default();
+
+    ApiRouter::<AppState>::new()
+        // Add all API routes:
+        .merge(user_api)
+        .merge(login_api)
+        // Mount docs (stateless ApiRouter<()>)
+        .nest_api_service("/docs", docs_routes())
+        // Apply shared OpenAPI configuration:
+        .finish_api_with(&mut api_spec, configure_openapi)
+        .layer(Extension(Arc::new(api_spec)))
+        // Admin route (not documented in OpenAPI spec)
+        .merge(admin_api)
+        // Add non-API routes:
+        .nest_service("/static", ServeDir::new("static"))
+        .route("/favicon.ico", get(favicon))
+        // Add frontend fallback:
+        .route("/", get(crate::frontend::spa_handler))
+        .route("/{*path}", get(crate::frontend::spa_handler))
+        // Add global middleware:
+        .layer(middleware::from_fn(user_session_middleware))
+        .layer(middleware::from_fn_with_state(
+            fwd_for_cfg,
+            trusted_forwarded_for::trusted_forwarded_for,
+        ))
+        .layer(TraceLayer::new_for_http())
 }
 
-async fn root() -> &'static str {
-    "OK"
-}
-
-async fn healthz() -> &'static str {
-    "healthy"
-}
-
-async fn fallback_404() -> (StatusCode, &'static str) {
-    (StatusCode::NOT_FOUND, "Not Found")
+async fn favicon() -> StatusCode {
+    StatusCode::NO_CONTENT
 }
