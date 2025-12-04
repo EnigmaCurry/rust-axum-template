@@ -1,6 +1,5 @@
-# Cargo.toml at repo root
 [workspace]
 members = [
-    "axum-dev",        # your main crate
-    "api_doc_macros",  # proc-macro crate
+    "${APP}",
+    "api_doc_macros",
 ]

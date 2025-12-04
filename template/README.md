@@ -1,8 +1,8 @@
-# axum-dev
+# ${APP}
 
-[![Crates.io](https://img.shields.io/crates/v/axum-dev?color=blue
-)](https://crates.io/crates/axum-dev)
-[![Coverage](https://img.shields.io/badge/Coverage-Report-purple)](https://enigmacurry.github.io/axum-dev/coverage/master/)
+[![Crates.io](https://img.shields.io/crates/v/${APP}?color=blue
+)](https://crates.io/crates/${APP})
+[![Coverage](https://img.shields.io/badge/Coverage-Report-purple)](https://${GIT_USERNAME}.github.io/${APP}/coverage/master/)
 
 
 ## Install
@@ -10,12 +10,12 @@
 If you don't want to run the Docker container, you can install the
 binary directly:
 
-[Download the latest release for your platform.](https://github.com/enigmacurry/axum-dev/releases)
+[Download the latest release for your platform.](https://github.com/${GIT_USERNAME}/${APP}/releases)
 
-Or install via cargo ([crates.io/crates/axum-dev](https://crates.io/crates/axum-dev)):
+Or install via cargo ([crates.io/crates/${APP}](https://crates.io/crates/${APP})):
 
 ```
-cargo install axum-dev
+cargo install ${APP}
 ```
 
 ## Development
