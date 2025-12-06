@@ -17,7 +17,7 @@ This is ALPHA software in-development.
  * Configurable TLS:
    * plain HTTP.
    * manual certificate and key file.
-   * Self-Signed TLS certificate.
+   * self-signed TLS certificate.
    * ACME TLS-ALPN-01
  * OpenAPI specification and Scalar test interface for the API.
  * Multiple user authentication backends:
