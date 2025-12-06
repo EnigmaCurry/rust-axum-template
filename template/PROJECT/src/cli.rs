@@ -1,144 +1,351 @@
-use crate::middleware::auth::AuthenticationMethod;
-use clap::{value_parser, Arg, Command};
+use crate::{errors::CliError, middleware::auth::AuthenticationMethod};
+use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum};
+use std::path::PathBuf;
 
-pub fn app() -> Command {
-    Command::new("axum-dev")
-        .version(env!("CARGO_PKG_VERSION"))
-        .author(env!("CARGO_PKG_AUTHORS"))
-        .about(env!("CARGO_PKG_DESCRIPTION"))
-        .arg(
-            Arg::new("log")
-                .long("log")
-                .global(true)
-                .num_args(1)
-                .value_name("LEVEL")
-                .value_parser(["trace", "debug", "info", "warn", "error"])
-                .help("Sets the log level, overriding the RUST_LOG environment variable."),
-        )
-        .arg(
-            Arg::new("verbose")
-                .short('v')
-                .global(true)
-                .help("Sets the log level to debug.")
-                .action(clap::ArgAction::SetTrue),
-        )
-        .subcommand(
-            Command::new("completions")
-                .about("Generates shell completions script (tab completion)")
-                .arg(
-                    Arg::new("shell")
-                        .help("The shell to generate completions for")
-                        .required(false)
-                        .value_parser(["bash", "zsh", "fish"]),
-                ),
-        )
-        .subcommand(
-            Command::new("serve")
-                .about("Run the HTTP API server")
-                .arg(
-                    Arg::new("listen_ip")
-                        .long("listen-ip")
-                        .value_name("IP")
-                        .env("LISTEN_IP")
-                        .default_value("127.0.0.1")
-                        .help("IP to bind (or set LISTEN_IP)"),
-                )
-                .arg(
-                    Arg::new("listen_port")
-                        .long("listen-port")
-                        .value_name("PORT")
-                        .env("LISTEN_PORT")
-                        .default_value("3000")
-                        .value_parser(value_parser!(u16))
-                        .help("Port to bind (or set LISTEN_PORT)"),
-                )
-                .arg(
-                    Arg::new("database_url")
-                        .long("database-url")
-                        .value_name("URL")
-                        .env("DATABASE_URL")
-                        .default_value("sqlite:data.db")
-                        .help("Database URL for sqlx (or set DATABASE_URL)"),
-                )
-                .arg(
-                    Arg::new("session_secure")
-                        .long("session-secure")
-                        .value_name("BOOL")
-                        .env("SESSION_SECURE")
-                        .value_parser(value_parser!(bool))
-                        .default_value("true")
-                        .help(
-                            "Whether to set the Secure flag on session cookies \
-                             (true/false or set SESSION_SECURE=true/false)",
-                        ),
-                )
-                .arg(
-                    Arg::new("session_check_seconds")
-                        .long("session-check-seconds")
-                        .value_name("SECONDS")
-                        .env("SESSION_CHECK_SECONDS")
-                        .value_parser(value_parser!(u64))
-                        .default_value("60")
-                        .help(
-                            "Session inactivity timeout in seconds \
-                             (default every 60 seconds, or set SESSION_CHECK_SECONDS)",
-                        ),
-                )
-                .arg(
-                    Arg::new("session_expiry_seconds")
-                        .long("session-expiry-seconds")
-                        .value_name("SECONDS")
-                        .env("SESSION_EXPIRY_SECONDS")
-                        .value_parser(value_parser!(u64))
-                        .default_value("604800") // 7 days
-                        .help(
-                            "Session inactivity timeout in seconds \
-                             (default 604800 = 7 days, or set SESSION_EXPIRY_SECONDS)",
-                        ),
-                )
-                .arg(
-                    Arg::new("authentication_method")
-                        .long("authentication-method")
-                        .env("AUTHENTICATION_METHOD")
-                        .value_name("METHOD")
-                        .num_args(1)
-                        .value_parser(value_parser!(AuthenticationMethod))
-                        .default_value("forward_auth")
-                        .help("Authentication method to use: forward_auth or username_password"),
-                )
-                .arg(
-                    Arg::new("trusted_header_name")
-                        .long("trusted-header-name")
-                        .env("TRUSTED_HEADER_NAME")
-                        .value_name("HEADER")
-                        .default_value("X-Forwarded-User")
-                        .help("Header to read the authenticated user email from"),
-                )
-                .arg(
-                    Arg::new("trusted_proxy")
-                        .long("trusted-proxy")
-                        .env("TRUSTED_PROXY")
-                        .value_name("IP")
-                        .default_value("127.0.0.1")
-                        .value_parser(value_parser!(std::net::IpAddr))
-                        .help("Only trust the header when the TCP peer IP matches this proxy"),
-                )
-                .arg(
-                    Arg::new("trusted_forwarded_for")
-                        .long("trusted-forwarded-for")
-                        .env("TRUSTED_FORWARDED_FOR")
-                        .action(clap::ArgAction::SetTrue)
-                        .help("Enable trusting X-Forwarded-For (or custom) from a trusted proxy"),
-                )
-                .arg(
-                    Arg::new("trusted_forwarded_for_name")
-                        .long("trusted_forwarded_for_name")
-                        .env("TRUSTED_FORWARDED_FOR_NAME")
-                        .value_name("HEADER")
-                        .default_value("X-Forwarded-For")
-                        .help(
-                            "Header to read client IP from when trusted-forwarded-for is enabled",
-                        ),
-                ),
-        )
+#[derive(Parser, Debug)]
+#[command(
+    name = env!("CARGO_BIN_NAME"),
+    version = env!("CARGO_PKG_VERSION"),
+    author = env!("CARGO_PKG_AUTHORS"),
+    about = env!("CARGO_PKG_DESCRIPTION"),
+    propagate_version = true
+)]
+pub struct Cli {
+    /// Sets the log level, overriding the RUST_LOG environment variable.
+    #[arg(
+        long,
+        global = true,
+        value_name = "LEVEL",
+        value_parser = ["trace", "debug", "info", "warn", "error"]
+    )]
+    pub log: Option<String>,
+
+    /// Sets the log level to debug.
+    #[arg(short = 'v', global = true)]
+    pub verbose: bool,
+
+    #[command(subcommand)]
+    pub command: Commands,
+}
+
+impl Cli {
+    pub fn validate(&self) -> Result<(), CliError> {
+        match &self.command {
+            Commands::Serve(args) => args.validate(),
+            Commands::Completions { .. } => Ok(()),
+        }
+    }
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Commands {
+    /// Generates shell completions script (tab completion).
+    Completions {
+        /// The shell to generate completions for.
+        #[arg(value_parser = ["bash", "zsh", "fish"])]
+        shell: Option<String>,
+    },
+
+    /// Run the HTTP API server.
+    Serve(ServeArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct ServeArgs {
+    #[command(flatten)]
+    pub network: NetworkArgs,
+
+    #[command(flatten)]
+    pub database: DatabaseArgs,
+
+    #[command(flatten)]
+    pub session: SessionArgs,
+
+    #[command(flatten)]
+    pub auth: AuthArgs,
+
+    #[command(flatten)]
+    pub tls: TlsArgs,
+}
+
+impl ServeArgs {
+    pub fn validate(&self) -> Result<(), CliError> {
+        self.tls.validate()
+    }
+}
+
+#[derive(Args, Debug)]
+pub struct NetworkArgs {
+    /// IP to bind (or set NET_LISTEN_IP).
+    #[arg(
+        long = "net-listen-ip",
+        env = "NET_LISTEN_IP",
+        value_name = "IP",
+        default_value = "127.0.0.1",
+        help_heading = "Network"
+    )]
+    pub listen_ip: String,
+
+    /// Port to bind (or set NET_LISTEN_PORT).
+    #[arg(
+        long = "net-listen-port",
+        env = "NET_LISTEN_PORT",
+        value_name = "PORT",
+        default_value_t = 3000u16,
+        help_heading = "Network"
+    )]
+    pub listen_port: u16,
+}
+
+#[derive(Args, Debug)]
+pub struct DatabaseArgs {
+    /// Database URL for sqlx (or set DATABASE_URL).
+    #[arg(
+        long = "database-url",
+        env = "DATABASE_URL",
+        value_name = "URL",
+        default_value = "sqlite:data.db",
+        help_heading = "Database"
+    )]
+    pub database_url: String,
+}
+
+#[derive(Args, Debug)]
+pub struct SessionArgs {
+    /// Whether to set the Secure flag on session cookies.
+    /// (true/false or set SESSION_SECURE=true/false).
+    #[arg(
+        long = "session-secure",
+        env = "SESSION_SECURE",
+        value_name = "BOOL",
+        default_value_t = true,
+        help_heading = "Session"
+    )]
+    pub session_secure: bool,
+
+    /// Session cleanup interval in seconds.
+    /// (default 60, or set SESSION_CHECK_SECONDS).
+    #[arg(
+        long = "session-check-seconds",
+        env = "SESSION_CHECK_SECONDS",
+        value_name = "SECONDS",
+        default_value_t = 60u64,
+        help_heading = "Session"
+    )]
+    pub session_check_seconds: u64,
+
+    /// Session inactivity timeout in seconds.
+    /// (default 604800 = 7 days, or set SESSION_EXPIRY_SECONDS).
+    #[arg(
+        long = "session-expiry-seconds",
+        env = "SESSION_EXPIRY_SECONDS",
+        value_name = "SECONDS",
+        default_value_t = 604800u64,
+        help_heading = "Session"
+    )]
+    pub session_expiry_seconds: u64,
+}
+
+#[derive(Args, Debug)]
+pub struct AuthArgs {
+    /// Authentication method to use: forward_auth or username_password.
+    #[arg(
+        long = "auth-method",
+        env = "AUTH_METHOD",
+        value_name = "METHOD",
+        default_value = "forward_auth",
+        help_heading = "Authentication"
+    )]
+    pub authentication_method: AuthenticationMethod,
+
+    /// Header to read the authenticated user email from.
+    #[arg(
+        long = "auth-trusted-header-name",
+        env = "AUTH_TRUSTED_HEADER_NAME",
+        value_name = "HEADER",
+        default_value = "X-Forwarded-User",
+        help_heading = "Authentication"
+    )]
+    pub trusted_header_name: String,
+
+    /// Only trust the header when the TCP peer IP matches this proxy.
+    #[arg(
+        long = "auth-trusted-proxy",
+        env = "AUTH_TRUSTED_PROXY",
+        value_name = "IP",
+        default_value = "127.0.0.1",
+        help_heading = "Authentication"
+    )]
+    pub trusted_proxy: std::net::IpAddr,
+
+    /// Enable trusting X-Forwarded-For (or custom) from a trusted proxy.
+    #[arg(
+        long = "auth-trusted-forwarded-for",
+        env = "AUTH_TRUSTED_FORWARDED_FOR",
+        action = clap::ArgAction::SetTrue,
+        help_heading = "Authentication"
+    )]
+    pub trusted_forwarded_for: bool,
+
+    /// Header to read client IP from when trusted-forwarded-for is enabled.
+    #[arg(
+        long = "auth-trusted-forwarded-for-name",
+        env = "AUTH_TRUSTED_FORWARDED_FOR_NAME",
+        value_name = "HEADER",
+        default_value = "X-Forwarded-For",
+        help_heading = "Authentication"
+    )]
+    pub trusted_forwarded_for_name: String,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+pub enum TlsMode {
+    /// No TLS – listen on plain HTTP only.
+    None,
+    /// Use local certificate and private key files.
+    Manual,
+    /// Use ACME (Let's Encrypt, etc.) for automatic TLS certificates.
+    Acme,
+    /// Use a self-signed certificate generated at startup.
+    #[value(name = "self-signed")]
+    SelfSigned,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+pub enum TlsAcmeChallenge {
+    /// Use the TLS-ALPN-01 challenge type.
+    #[value(name = "tls-alpn-01")]
+    TlsAlpn01,
+
+    /// Use the HTTP-01 challenge type.
+    #[value(name = "http-01")]
+    Http01,
+
+    /// Use the DNS-01 challenge type.
+    #[value(name = "dns-01")]
+    Dns01,
+}
+
+#[derive(Args, Debug)]
+pub struct TlsArgs {
+    /// TLS mode to use: none, manual, acme, or self-signed.
+    #[arg(
+        long = "tls-mode",
+        env = "TLS_MODE",
+        value_enum,
+        default_value_t = TlsMode::None,
+        help_heading = "TLS"
+    )]
+    pub mode: TlsMode,
+
+    /// Path to TLS certificate (PEM) when --tls-mode=manual.
+    #[arg(
+        long = "tls-cert-path",
+        env = "TLS_CERT_PATH",
+        value_name = "FILE",
+        help_heading = "TLS"
+    )]
+    pub cert_path: Option<PathBuf>,
+
+    /// Path to TLS private key (PEM) when --tls-mode=manual.
+    #[arg(
+        long = "tls-key-path",
+        env = "TLS_KEY_PATH",
+        value_name = "FILE",
+        help_heading = "TLS"
+    )]
+    pub key_path: Option<PathBuf>,
+
+    /// Additional DNS SubjectAltNames (SANs) for the TLS certificate.
+    ///
+    /// APP_HOST is used as the primary Common Name (CN); these names are added
+    /// as SubjectAltNames. Used for ACME and self-signed modes.
+    #[arg(
+        long = "tls-san",
+        env = "TLS_SANS",
+        value_name = "DNSNAME",
+        num_args = 0..,
+        value_delimiter = ',',
+        help_heading = "TLS"
+    )]
+    pub sans: Vec<String>,
+
+    /// ACME challenge type to use when --tls-mode=acme.
+    #[arg(
+        long = "tls-acme-challenge",
+        env = "TLS_ACME_CHALLENGE",
+        value_enum,
+        default_value_t = TlsAcmeChallenge::TlsAlpn01,
+        help_heading = "TLS"
+    )]
+    pub acme_challenge: TlsAcmeChallenge,
+
+    /// ACME directory URL (e.g. Let's Encrypt).
+    /// Only used when --tls-mode=acme.
+    #[arg(
+        long = "tls-acme-directory-url",
+        env = "TLS_ACME_DIRECTORY_URL",
+        value_name = "URL",
+        default_value = "https://acme-v02.api.letsencrypt.org/directory",
+        help_heading = "TLS"
+    )]
+    pub acme_directory_url: String,
+
+    /// Contact email for ACME registration when --tls-mode=acme.
+    #[arg(
+        long = "tls-acme-email",
+        env = "TLS_ACME_EMAIL",
+        value_name = "EMAIL",
+        help_heading = "TLS"
+    )]
+    pub acme_email: Option<String>,
+
+    /// Directory to store TLS account, certificate, and key data for ACME or self-signed modes.
+    ///
+    /// If tls-mode == self-signed, and this option is unset, it will create ephemeral certificates.
+    #[arg(
+        long = "tls-cache-dir",
+        env = "TLS_CACHE_DIR",
+        value_name = "DIR",
+        help_heading = "TLS"
+    )]
+    pub cache_dir: Option<String>,
+
+    /// Validity in days for self-signed certificate.
+    /// Used when --tls-mode=self-signed.
+    #[arg(
+        long = "tls-self-signed-valid-days",
+        env = "TLS_SELF_SIGNED_VALID_DAYS",
+        value_name = "DAYS",
+        default_value_t = 365u32,
+        help_heading = "TLS"
+    )]
+    pub self_signed_valid_days: u32,
+}
+
+impl TlsArgs {
+    pub fn validate(&self) -> Result<(), CliError> {
+        if matches!(self.mode, TlsMode::Acme) && self.cache_dir.is_none() {
+            return Err(CliError::InvalidArgs(
+                "TLS cache directory is required when --tls-mode=acme. \
+                 Provide --tls-cache-dir or set TLS_CACHE_DIR."
+                    .to_string(),
+            ));
+        }
+
+        if matches!(self.mode, TlsMode::Manual) {
+            if self.cert_path.is_none() || self.key_path.is_none() {
+                return Err(CliError::InvalidArgs(
+                    "Both --tls-cert-path and --tls-key-path are required when --tls-mode=manual."
+                        .to_string(),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+pub fn app() -> clap::Command {
+    Cli::command()
 }

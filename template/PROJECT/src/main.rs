@@ -1,11 +1,13 @@
 use axum::http::HeaderName;
-use clap::error::ErrorKind;
+use clap::{CommandFactory, Parser, error::ErrorKind};
 use clap_complete::shells::Shell;
+use cli::{TlsAcmeChallenge, TlsMode};
 use errors::CliError;
 use middleware::auth::AuthenticationMethod;
 use std::env;
 use std::io::Write;
 use std::net::{IpAddr, SocketAddr};
+use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 
 mod api_docs;
@@ -18,7 +20,9 @@ mod prelude;
 mod response;
 mod routes;
 mod server;
+mod tls;
 
+use crate::cli::{Cli, Commands, ServeArgs};
 use prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -46,10 +50,9 @@ where
     W1: Write,
     W2: Write,
 {
-    let mut cmd = cli::app();
-
-    let matches = match cmd.clone().try_get_matches_from(args) {
-        Ok(m) => m,
+    // Parse CLI, but intercept help/version/errors instead of exiting the process.
+    let cli = match Cli::try_parse_from(args) {
+        Ok(cli) => cli,
         Err(e) => {
             match e.kind() {
                 ErrorKind::DisplayHelp
@@ -57,8 +60,7 @@ where
                 | ErrorKind::InvalidSubcommand
                 | ErrorKind::UnknownArgument
                 | ErrorKind::DisplayVersion => {
-                    // Let clap format the help/version text; this will be
-                    // the correct one for main OR the current subcommand.
+                    // Let clap format the help/version text.
                     let _ = write!(out, "{e}");
                     return Ok(());
                 }
@@ -68,13 +70,15 @@ where
             }
         }
     };
+    cli.validate()?;
 
-    let log_level = (if matches.get_flag("verbose") {
+    // Global log level handling (same logic as before, but using Cli fields)
+    let log_level = (if cli.verbose {
         Some("debug".to_string())
     } else {
-        matches.get_one::<String>("log").cloned()
+        cli.log.clone()
     })
-    .or_else(|| std::env::var("RUST_LOG").ok())
+    .or_else(|| env::var("RUST_LOG").ok())
     .unwrap_or_else(|| "info".to_string());
 
     let _ = env_logger::Builder::new()
@@ -83,28 +87,19 @@ where
         .try_init();
     debug!("logging initialized.");
 
-    // Print help if no subcommand is given (your existing logic).
-    if matches.subcommand_name().is_none() {
-        let _ = cmd.write_help(out);
-        let _ = writeln!(out);
-        return Ok(());
-    }
-
-    match matches.subcommand() {
-        Some(("completions", sub_matches)) => completions(sub_matches, out, err),
-        Some(("serve", sub_matches)) => serve(sub_matches, out, err),
-        // (Optional) you could also recognise Clap's built-in `help` subcommand
-        // explicitly, but with the ErrorKind handling above, this usually isn't needed.
-        _ => Err(CliError::InvalidArgs("unsupported command".to_string())),
+    // Dispatch subcommands using strongly-typed enums instead of ArgMatches.
+    match cli.command {
+        Commands::Completions { shell } => completions(shell, out, err),
+        Commands::Serve(args) => serve(args, out, err),
     }
 }
 
 fn completions<W1: Write, W2: Write>(
-    sub_matches: &clap::ArgMatches,
+    shell: Option<String>,
     out: &mut W1,
     err: &mut W2,
 ) -> Result<(), CliError> {
-    if let Some(shell) = sub_matches.get_one::<String>("shell") {
+    if let Some(shell) = shell {
         match shell.as_str() {
             "bash" => generate_completion_script(Shell::Bash, out),
             "zsh" => generate_completion_script(Shell::Zsh, out),
@@ -140,16 +135,18 @@ fn completions<W1: Write, W2: Write>(
 }
 
 fn generate_completion_script<W: Write>(shell: Shell, out: &mut W) {
-    clap_complete::generate(shell, &mut cli::app(), env!("CARGO_BIN_NAME"), out)
+    // Rebuild the clap Command from the derived Cli type
+    clap_complete::generate(shell, &mut Cli::command(), env!("CARGO_BIN_NAME"), out)
 }
 
 fn serve<W1: Write, W2: Write>(
-    sub_matches: &clap::ArgMatches,
+    args: ServeArgs,
     _out: &mut W1,
     _err: &mut W2,
 ) -> Result<(), CliError> {
-    let ip = sub_matches.get_one::<String>("listen_ip").unwrap();
-    let port = sub_matches.get_one::<u16>("listen_port").unwrap();
+    // --- Network ---
+    let ip = &args.network.listen_ip;
+    let port = args.network.listen_port;
     let addr_str = format!("{ip}:{port}");
 
     let addr: SocketAddr = match addr_str.parse() {
@@ -161,28 +158,120 @@ fn serve<W1: Write, W2: Write>(
         }
     };
 
-    // ---- New: DB + session config from CLI/env ----
-    let db_url = sub_matches
-        .get_one::<String>("database_url")
-        .cloned()
-        .unwrap();
+    // --- TLS mode selection ---
+    // --- TLS mode selection ---
+    let tls_config = match args.tls.mode {
+        TlsMode::None => {
+            info!("TLS mode: none (plain HTTP).");
+            server::TlsConfig::Http
+        }
+        TlsMode::Manual => {
+            let cert_path = args.tls.cert_path.clone().ok_or_else(|| {
+                CliError::InvalidArgs("Missing --tls-cert-path for --tls-mode=manual".to_string())
+            })?;
+            let key_path = args.tls.key_path.clone().ok_or_else(|| {
+                CliError::InvalidArgs("Missing --tls-key-path for --tls-mode=manual".to_string())
+            })?;
 
-    let session_secure = *sub_matches.get_one::<bool>("session_secure").unwrap();
+            info!(
+                "TLS mode: manual (HTTPS) – cert={}, key={}",
+                cert_path.display(),
+                key_path.display()
+            );
 
-    let session_expiry_secs = *sub_matches
-        .get_one::<u64>("session_expiry_seconds")
-        .unwrap();
-    let session_check_secs = *sub_matches.get_one::<u64>("session_check_seconds").unwrap();
+            server::TlsConfig::RustlsFiles {
+                cert_path,
+                key_path,
+            }
+        }
+        TlsMode::SelfSigned => {
+            let cache_dir = args.tls.cache_dir.as_ref().map(|s| PathBuf::from(s));
 
-    // ---- Authentication method + trusted USER header options ----
-    let auth_method = *sub_matches
-        .get_one::<AuthenticationMethod>("authentication_method")
-        .expect("clap should provide a default for authentication_method");
+            let sans = args.tls.sans.clone();
+            let valid_days = args.tls.self_signed_valid_days;
 
-    let header_name_str = sub_matches
-        .get_one::<String>("trusted_header_name")
-        .map(|s| s.as_str())
-        .unwrap_or("X-Forwarded-User");
+            info!(
+                "TLS mode: self-signed (HTTPS) – cache_dir={:?}, sans={:?}, valid_days={}",
+                cache_dir, sans, valid_days
+            );
+
+            server::TlsConfig::SelfSigned {
+                cache_dir,
+                sans,
+                valid_days,
+            }
+        }
+        TlsMode::Acme => {
+            // For now we only support TLS-ALPN-01, which is what tokio-rustls-acme uses.
+            if args.tls.acme_challenge != TlsAcmeChallenge::TlsAlpn01 {
+                return Err(CliError::InvalidArgs(
+                    "Only TLS-ALPN-01 is supported for ACME at the moment. \
+                     Use --tls-acme-challenge=tls-alpn-01."
+                        .to_string(),
+                ));
+            }
+
+            let cache_dir_str = args.tls.cache_dir.clone().ok_or_else(|| {
+                CliError::InvalidArgs(
+                    "TLS cache directory is required when --tls-mode=acme. \
+                     Provide --tls-cache-dir or set TLS_CACHE_DIR."
+                        .to_string(),
+                )
+            })?;
+            let cache_dir = PathBuf::from(cache_dir_str);
+
+            // Determine domains: use --tls-san / TLS_SANS, falling back to APP_HOST
+            let mut domains: Vec<String> = args
+                .tls
+                .sans
+                .iter()
+                .cloned()
+                .filter(|s| !s.trim().is_empty())
+                .collect();
+
+            if domains.is_empty() {
+                if let Ok(app_host) = env::var("APP_HOST") {
+                    domains.push(app_host);
+                } else {
+                    return Err(CliError::InvalidArgs(
+                        "ACME mode requires at least one domain. \
+                         Provide --tls-san or set APP_HOST."
+                            .to_string(),
+                    ));
+                }
+            }
+
+            let directory_url = args.tls.acme_directory_url.clone();
+            let contact_email = args.tls.acme_email.clone();
+
+            info!(
+                "TLS mode: acme (TLS-ALPN-01) – directory_url={}, cache_dir={}, domains={:?}, contact_email={:?}",
+                directory_url,
+                cache_dir.display(),
+                domains,
+                contact_email,
+            );
+
+            server::TlsConfig::Acme {
+                directory_url,
+                cache_dir,
+                domains,
+                contact_email,
+            }
+        }
+    };
+
+    // --- Database + session config ---
+    let db_url = args.database.database_url;
+
+    let session_secure = args.session.session_secure;
+    let session_expiry_secs = args.session.session_expiry_seconds;
+    let session_check_secs = args.session.session_check_seconds;
+
+    // --- Authentication method + trusted USER header options ---
+    let auth_method: AuthenticationMethod = args.auth.authentication_method;
+
+    let header_name_str = args.auth.trusted_header_name.as_str();
 
     let header_name = match HeaderName::from_bytes(header_name_str.as_bytes()) {
         Ok(h) => h,
@@ -193,7 +282,7 @@ fn serve<W1: Write, W2: Write>(
         }
     };
 
-    let trusted_proxy = *sub_matches.get_one::<IpAddr>("trusted_proxy").unwrap();
+    let trusted_proxy: IpAddr = args.auth.trusted_proxy;
 
     let auth_cfg = middleware::trusted_header_auth::AuthConfig {
         method: auth_method,
@@ -213,13 +302,9 @@ fn serve<W1: Write, W2: Write>(
         }
     }
 
-    // ---- Trusted FORWARDED-FOR (client IP) options ----
-    let fwd_enabled = sub_matches.get_flag("trusted_forwarded_for");
-
-    let fwd_header_str = sub_matches
-        .get_one::<String>("trusted_forwarded_for_name")
-        .map(|s| s.as_str())
-        .unwrap_or("X-Forwarded-For");
+    // --- Trusted FORWARDED-FOR (client IP) options ---
+    let fwd_enabled = args.auth.trusted_forwarded_for;
+    let fwd_header_str = args.auth.trusted_forwarded_for_name.as_str();
 
     let fwd_header_name = match HeaderName::from_bytes(fwd_header_str.as_bytes()) {
         Ok(h) => h,
@@ -237,10 +322,10 @@ fn serve<W1: Write, W2: Write>(
     };
 
     if fwd_enabled {
-        info!("Trusted FORWARDED-FOR enabled: header='{fwd_header_str}', trusted_proxy={trusted_proxy}");
+        info!(
+            "Trusted FORWARDED-FOR enabled: header='{fwd_header_str}', trusted_proxy={trusted_proxy}"
+        );
     }
-
-    info!("Starting server on http://{addr}");
 
     let rt = match tokio::runtime::Runtime::new() {
         Ok(rt) => rt,
@@ -259,46 +344,46 @@ fn serve<W1: Write, W2: Write>(
         session_secure,
         session_expiry_secs,
         session_check_secs,
+        tls_config,
     )) {
         Ok(()) => Ok(()),
         Err(e) => Err(CliError::RuntimeError(format!("Server error: {e:#}"))),
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::Write;
+#[test]
+fn help_prints_when_no_subcommand() {
+    let mut out = Vec::new();
+    let mut err = Vec::new();
 
-    #[test]
-    fn help_prints_when_no_subcommand() {
-        // Capture stdout/stderr
-        let mut out = Vec::new();
-        let mut err = Vec::new();
+    let bin = env!("CARGO_BIN_NAME");
+    // No subcommand => run_cli should print top-level help to stdout
+    run_cli([bin], &mut out, &mut err).expect("run_cli should succeed for help");
 
-        // Run with just the bin name => no subcommand => help on stdout
-        match run_cli(["app"], &mut out, &mut err) {
-            Ok(()) => {}
-            Err(_e) => {
-                panic!("expected no errors when printing help");
-            }
-        };
+    assert!(
+        err.is_empty(),
+        "expected no stderr output, got: {}",
+        String::from_utf8_lossy(&err)
+    );
 
-        assert!(
-            err.is_empty(),
-            "expected no stderr output, got: {}",
-            String::from_utf8_lossy(&err)
-        );
+    let actual = String::from_utf8(out).expect("stdout should be valid utf8");
 
-        let actual = String::from_utf8(out).expect("stdout should be valid utf8");
+    // Build expected help text directly from the Command
+    let mut cmd = crate::cli::app();
+    let mut expected_buf = Vec::new();
+    cmd.write_help(&mut expected_buf).unwrap();
+    let expected_help = String::from_utf8(expected_buf).unwrap();
 
-        // Build expected help text the same way dispatch does.
-        let mut expected_buf = Vec::new();
-        let mut cmd = crate::cli::app();
-        cmd.write_help(&mut expected_buf).unwrap();
-        writeln!(&mut expected_buf).unwrap(); // dispatch adds a newline after help
-        let expected = String::from_utf8(expected_buf).unwrap();
-
-        assert_eq!(actual, expected);
+    // Normalize line endings & trim trailing whitespace for a stable comparison
+    fn normalize(s: &str) -> String {
+        s.replace("\r\n", "\n").trim_end().to_string()
     }
+
+    let actual_norm = normalize(&actual);
+    let expected_norm = normalize(&expected_help);
+
+    assert_eq!(
+        actual_norm, expected_norm,
+        "normalized help output from run_cli did not match Command::write_help()"
+    );
 }

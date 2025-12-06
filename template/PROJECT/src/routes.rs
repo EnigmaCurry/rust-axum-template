@@ -1,15 +1,15 @@
 use aide::{axum::ApiRouter, openapi::OpenApi};
-use axum::{http::StatusCode, middleware, routing::get, Extension, Router};
+use axum::{Extension, Router, http::StatusCode, middleware, routing::get};
 use std::sync::Arc;
 use tower_http::{services::ServeDir, trace::TraceLayer};
 
 use crate::{
+    AppState,
     api_docs::{configure_openapi, docs_routes},
     middleware::{
         admin_only::admin_only_middleware, csrf_protection, trusted_forwarded_for,
         trusted_header_auth, user_session::user_session_middleware,
     },
-    AppState,
 };
 
 pub mod admin;

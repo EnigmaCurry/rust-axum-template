@@ -18,9 +18,7 @@ pub async fn spa_handler(
     maybe_path: Option<Path<String>>,
     user_session: UserSession,
 ) -> impl IntoResponse {
-    let requested: String = maybe_path
-        .map(|Path(p)| p)
-        .unwrap_or_default();
+    let requested: String = maybe_path.map(|Path(p)| p).unwrap_or_default();
 
     let requested = requested.trim_matches('/').to_string();
 
@@ -48,14 +46,15 @@ pub async fn spa_handler(
     };
 
     if !asset_path.is_empty()
-        && let Some(content) = Frontend::get(asset_path) {
-            let mime = mime_guess::from_path(asset_path).first_or_octet_stream();
-            return Response::builder()
-                .status(StatusCode::OK)
-                .header("Content-Type", mime.as_ref())
-                .body(Body::from(content.data))
-                .unwrap();
-        }
+        && let Some(content) = Frontend::get(asset_path)
+    {
+        let mime = mime_guess::from_path(asset_path).first_or_octet_stream();
+        return Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", mime.as_ref())
+            .body(Body::from(content.data))
+            .unwrap();
+    }
 
     // ---------- 2) HTML routes ----------
     let candidates: Vec<String> = if requested.is_empty() {

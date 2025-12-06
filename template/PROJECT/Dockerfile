@@ -1,6 +1,6 @@
 # Choose "release" or "debug" at build time:
-#   docker build -f axum-dev/Dockerfile --build-arg CARGO_PROFILE=debug -t axum-dev:debug .
-#   docker build -f axum-dev/Dockerfile --build-arg CARGO_PROFILE=release -t axum-dev:release .
+#   docker build -f ${APP}/Dockerfile --build-arg CARGO_PROFILE=debug -t ${APP}:debug .
+#   docker build -f ${APP}/Dockerfile --build-arg CARGO_PROFILE=release -t ${APP}:release .
 ARG CARGO_PROFILE=release
 
 # ---- Frontend builder (SvelteKit) ---------------------------------
@@ -41,17 +41,17 @@ WORKDIR /app
 # sqlx-cli for migrations
 RUN cargo install --locked sqlx-cli --no-default-features --features sqlite
 
-# Pre-fetch Rust dependencies for axum-dev crate
-WORKDIR /app/axum-dev
-COPY axum-dev/Cargo.toml axum-dev/Cargo.lock ./
+# Pre-fetch Rust dependencies for ${APP} crate
+WORKDIR /app/${APP}
+COPY ${APP}/Cargo.toml ${APP}/Cargo.lock ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs && \
     cargo fetch && rm -rf src
 
 # Copy full Rust project
-COPY axum-dev ./
+COPY ${APP} ./
 
 # Copy built frontend into the location Rust expects at compile time.
-# For #[folder = "../frontend/build"], from /app/axum-dev this resolves to /app/frontend/build.
+# For #[folder = "../frontend/build"], from /app/${APP} this resolves to /app/frontend/build.
 WORKDIR /app
 COPY --from=frontend-builder /frontend/build ./frontend/build
 
@@ -71,7 +71,7 @@ RUN echo "=== DEBUG: contents of /app after copying frontend build ===" && \
     fi
 
 # Now build the Rust binary
-WORKDIR /app/axum-dev
+WORKDIR /app/${APP}
 
 ENV DATABASE_URL=sqlite:test.db
 
@@ -91,7 +91,7 @@ RUN sqlx database create && sqlx migrate run && \
 
 # ---- Runtime -------------------------------------------------
 FROM debian:trixie-slim AS runtime
-LABEL org.opencontainers.image.source="https://github.com/enigmacurry/axum-dev"
+LABEL org.opencontainers.image.source="https://github.com/enigmacurry/${APP}"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates coreutils sqlite3 && \
@@ -108,8 +108,8 @@ RUN groupadd --gid "$GID" "$USER" \
 # Re-declare build arg in this stage so we can use it in COPY
 ARG CARGO_PROFILE
 
-# NOTE: target dir is now under /app/axum-dev/target (not /app/target)
-COPY --from=builder /app/axum-dev/target/${CARGO_PROFILE}/axum-dev /usr/local/bin/axum-dev
+# NOTE: target dir is now under /app/${APP}/target (not /app/target)
+COPY --from=builder /app/${APP}/target/${CARGO_PROFILE}/${APP} /usr/local/bin/${APP}
 
 RUN mkdir /data && chown ${USER} /data
 VOLUME /data
@@ -120,4 +120,4 @@ ENV DATABASE_URL=sqlite:///data/data.db \
 
 USER $USER
 
-ENTRYPOINT ["axum-dev"]
+ENTRYPOINT ["${APP}"]

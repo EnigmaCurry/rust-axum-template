@@ -11,9 +11,14 @@ This is ALPHA software in-development.
 
 ## Features
 
- * Builds a single binary containing API server and SvelteKit frontend.
- * Restful JSON API.
+ * Builds a single binary containing RESTful API server and SvelteKit
+   frontend.
  * Embedded SQLite database.
+ * Configurable TLS:
+   * plain HTTP.
+   * manual certificate and key file.
+   * Self-Signed TLS certificate.
+   * ACME TLS-ALPN-01
  * OpenAPI specification and Scalar test interface for the API.
  * Multiple user authentication backends:
    * Username / Password

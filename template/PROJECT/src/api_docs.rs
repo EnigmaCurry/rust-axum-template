@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
+use aide::NoApi;
 use aide::axum::IntoApiResponse;
 use aide::openapi::{ApiKeyLocation, OpenApi, SecurityScheme};
 use aide::transform::TransformOpenApi;
-use aide::NoApi;
 use axum::{Extension, Json};
 
-use aide::axum::{routing::get, ApiRouter};
+use aide::axum::{ApiRouter, routing::get};
 use aide::redoc::Redoc;
 use aide::scalar::Scalar;
 use aide::swagger::Swagger;

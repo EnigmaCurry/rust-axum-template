@@ -1,9 +1,9 @@
 use axum::{
+    Json,
     extract::Request,
     http::{Method, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
-    Json,
 };
 use serde::Serialize;
 

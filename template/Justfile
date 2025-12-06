@@ -27,23 +27,52 @@ DOCKER       := env_var_or_default("DOCKER", "docker")
 DOCKER_IMAGE := env_var_or_default("DOCKER_IMAGE", "rust-axum-template")
 DOCKER_VOLUME := env_var_or_default("DOCKER_VOLUME", "rust-axum-template")
 
-## Local database path (NOT used by docker)
+# Local DB path (does not affect docker container)
 DATABASE_PATH := env_var_or_default("DATABASE_PATH", "data.db")
-DATABASE_URL := "sqlite://" + DATABASE_PATH
+DATABASE_URL       := env_var_or_default("DATABASE_URL", "sqlite://" + DATABASE_PATH)
 
-### Container environment :::
-LISTEN_IP   := env_var_or_default("LISTEN_IP", "0.0.0.0")
-LISTEN_PORT := env_var_or_default("LISTEN_PORT", "3000")
-APP_HOST := env_var_or_default("APP_HOST", "change-me.example.com")
+### Container / app environment :::
 
-TRUSTED_PROXY := env_var_or_default("TRUSTED_PROXY", "127.0.0.1")
+# Network
+NET_LISTEN_IP   := env_var_or_default("NET_LISTEN_IP", "0.0.0.0")
+NET_LISTEN_PORT := env_var_or_default("NET_LISTEN_PORT", "3000")
+APP_HOST        := env_var_or_default("APP_HOST", "change-me.example.com")
+
+# Authentication / trusted headers
+AUTH_TRUSTED_PROXY              := env_var_or_default("AUTH_TRUSTED_PROXY", "127.0.0.1")
 # Set auth method: username_password or forward_auth
-AUTHENTICATION_METHOD := env_var_or_default("AUTHENTICATION_METHOD", "username_password")
-TRUSTED_HEADER_NAME := env_var_or_default("TRUSTED_HEADER_NAME", "X-Forwarded-User")
-TRUSTED_HEADER_AUTH_GROUP := env_var_or_default("TRUSTED_HEADER_AUTH_GROUP", "admin")
+AUTH_METHOD                     := env_var_or_default("AUTH_METHOD", "username_password")
+AUTH_TRUSTED_HEADER_NAME        := env_var_or_default("AUTH_TRUSTED_HEADER_NAME", "X-Forwarded-User")
+AUTH_TRUSTED_HEADER_AUTH_GROUP       := env_var_or_default("TRUSTED_HEADER_AUTH_GROUP", "admin")
 
-TRUSTED_FORWARDED_FOR := "false"
-TRUSTED_FORWARDED_FOR_NAME := env_var_or_default("TRUSTED_FORWARDED_FOR_NAME", "X-Forwarded-For")
+AUTH_TRUSTED_FORWARDED_FOR      := env_var_or_default("AUTH_TRUSTED_FORWARDED_FOR", "false")
+AUTH_TRUSTED_FORWARDED_FOR_NAME := env_var_or_default("AUTH_TRUSTED_FORWARDED_FOR_NAME", "X-Forwarded-For")
+
+# Session
+SESSION_SECURE          := env_var_or_default("SESSION_SECURE", "true")
+SESSION_EXPIRY_SECONDS  := env_var_or_default("SESSION_EXPIRY_SECONDS", "604800")
+SESSION_CHECK_SECONDS   := env_var_or_default("SESSION_CHECK_SECONDS", "60")
+
+# TLS
+TLS_MODE := env_var_or_default("TLS_MODE","self-signed")
+# Path to TLS certificate (PEM) only used when TLS_MODE=manual.
+TLS_CERT_PATH := env_var_or_default("TLS_CERT_PATH","cert.pem")
+# Path to TLS private key (PEM) only used when TLS_MODE=manual.
+TLS_KEY_PATH := env_var_or_default("TLS_KEY_PATH","key.pem")
+# Additional DNS SubjectAltNames (SANs) for the TLS certificate.
+# APP_HOST is always used as the primary Common Name (CN).
+# Comma-separated list.
+TLS_SANS := env_var_or_default("TLS_SANS","")
+# ACME challenge type to use: tls-alpn-01, http-01, or dns-01.
+TLS_ACME_CHALLENGE := env_var_or_default("TLS_ACME_CHALLENGE","tls-alpn-01")
+# ACME directory URL. Default is Let's Encrypt production.
+TLS_ACME_DIRECTORY_URL := env_var_or_default("TLS_ACME_DIRECTORY_URL","https://acme-v02.api.letsencrypt.org/directory")
+# Contact email for ACME registration.
+TLS_ACME_EMAIL := env_var_or_default("TLS_ACME_EMAIL","")
+# Validity in days for a self-signed certificate.
+TLS_SELF_SIGNED_VALID_DAYS := env_var_or_default("TLS_SELF_SIGNED_VALID_DAYS","3650")
+# Directory to store TLS account, certificate, and key data for ACME or self-signed modes.
+TLS_CACHE_DIR := env_var_or_default("TLS_CACHE_DIR","./tls-cache")
 
 # print help for Just targets
 help:
@@ -179,12 +208,12 @@ test-verbose *args: _env_check build-frontend
 # Run tests continuously on file change
 test-watch *args: _env_check
     just _with-temp-db-script \
-        'cargo watch -C ${APP} -s "clear && cargo nextest run --manifest-path \"{{MANIFEST}}\" {{args}}"'
+        'cargo watch -C {{PROJECT_DIR}} -s "clear && cargo nextest run --manifest-path \"{{MANIFEST}}\" {{args}}"'
 
 # Run tests continuously with verbose logging
 test-watch-verbose *args: _env_check
     just _with-temp-db-script \
-        'RUST_TEST_THREADS=1 cargo watch -C ${APP} -s "clear && cargo nextest run --manifest-path \"{{MANIFEST}}\" --nocapture -- {{args}}"'
+        'RUST_TEST_THREADS=1 cargo watch -C {{PROJECT_DIR}} -s "clear && cargo nextest run --manifest-path \"{{MANIFEST}}\" --nocapture -- {{args}}"'
 
 # Build coverage report
 test-coverage *args: clean _env_check build-frontend
@@ -269,7 +298,7 @@ build-docker: _env_check
 # Serve the app by itself as a standalone binary
 serve *args: _env_check build
     cd {{PROJECT_DIR}} && \
-    TRUSTED_FORWARDED_FOR=false \
+    AUTH_TRUSTED_FORWARDED_FOR=false \
     DATABASE_URL={{DATABASE_URL}} \
     just run serve {{args}}
 
@@ -278,29 +307,29 @@ serve-docker: _env_check build-docker
     ${DOCKER} run --rm -it \
     --name {{APP}} \
     -v ${DOCKER_VOLUME}:/data \
-    -e AUTHENTICATION_METHOD=forward_auth \
+    -e AUTH_METHOD=forward_auth
     -e RUST_LOG \
     -e RUST_BACKTRACE \
     -e RUST_LIB_BACKTRACE \
-    -e LISTEN_IP \
-    -e LISTEN_PORT \
-    -e TRUSTED_PROXY \
-    -e TRUSTED_HEADER_NAME \
-    -e TRUSTED_FORWARDED_FOR_NAME \
-    -e TRUSTED_HEADER_AUTH=true \
-    -e TRUSTED_FORWARDED_FOR=true \
+    -e NET_LISTEN_IP \
+    -e NET_LISTEN_PORT \
+    -e AUTH_TRUSTED_PROXY \
+    -e AUTH_TRUSTED_HEADER_NAME \
+    -e AUTH_TRUSTED_FORWARDED_FOR_NAME \
+    -e AUTH_TRUSTED_HEADER_AUTH=true \
+    -e AUTH_TRUSTED_FORWARDED_FOR=true \
     -e SESSION_EXPIRY_SECONDS \
     -e SESSION_CHECK_SECONDS \
     -l traefik.enable=true \
     -l traefik.http.routers.{{APP}}.rule=Host\(\`${APP_HOST}\`\) \
     -l traefik.http.routers.{{APP}}.entrypoints=websecure \
     -l traefik.http.routers.{{APP}}.tls=true \
-    -l traefik.http.services.{{APP}}.loadbalancer.server.port=${LISTEN_PORT} \
+    -l traefik.http.services.{{APP}}.loadbalancer.server.port=${NET_LISTEN_PORT} \
     -l "traefik.http.routers.{{APP}}-login.rule=Host(\`${APP_HOST}\`) && PathPrefix(\`/login\`)" \
     -l traefik.http.routers.{{APP}}-login.entrypoints=websecure \
     -l traefik.http.routers.{{APP}}-login.tls=true \
     -l traefik.http.routers.{{APP}}-login.service={{APP}} \
-    -l traefik.http.routers.{{APP}}-login.middlewares=traefik-forward-auth@docker,header-authorization-group-${TRUSTED_HEADER_AUTH_GROUP}@file \
+    -l traefik.http.routers.{{APP}}-login.middlewares=traefik-forward-auth@docker,header-authorization-group-${AUTH_TRUSTED_HEADER_AUTH_GROUP}@file \
     ${DOCKER_IMAGE} serve
 
 # Serve the app in Docker without Traefik
@@ -309,16 +338,16 @@ serve-docker-plain: _env_check build-docker
     --name {{APP}} \
     -v ${DOCKER_VOLUME}:/data \
     -p ${LISTEN_PORT}:${LISTEN_PORT} \
-    -e AUTHENTICATION_METHOD=username_password \
+    -e AUTH_METHOD=username_password \
     -e SESSION_SECURE=false \
     -e RUST_LOG \
     -e RUST_BACKTRACE \
     -e RUST_LIB_BACKTRACE \
-    -e LISTEN_IP \
-    -e LISTEN_PORT \
+    -e NET_LISTEN_IP \
+    -e NET_LISTEN_PORT \
     -e SESSION_EXPIRY_SECONDS \
     -e SESSION_CHECK_SECONDS \
-    -e TRUSTED_FORWARDED_FOR=false \
+    -e AUTH_TRUSTED_FORWARDED_FOR=false \
     ${DOCKER_IMAGE} serve
 
 # Apply database migrations in local database
