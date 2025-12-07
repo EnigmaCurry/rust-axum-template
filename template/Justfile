@@ -287,8 +287,8 @@ clean-profile:
 # Build svelte frontend
 build-frontend: _env_check
     cd frontend && \
-    ${NPM} install && \
-    ${NPM} build
+    {{NPM}} install && \
+    {{NPM}} build
 
 # Build docker image
 build-docker: _env_check
