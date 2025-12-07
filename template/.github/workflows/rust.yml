@@ -104,7 +104,6 @@ jobs:
       #   run: just test --release
 
       - name: Run coverage report
-        working-directory: ${{ env.PROJECT_DIR }}
         run: just test-coverage --release && ls -lha ./target/llvm-cov/html
 
       - name: Extract project information
