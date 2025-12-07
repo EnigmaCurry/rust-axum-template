@@ -7,14 +7,16 @@
 ## Build
 
 ```
-## Debug build:
-just build
-
-## Release build:
 just build --release
 ```
 
-Find your built executable in `target/debug/${APP}` or `target/release/${APP}`.
+Find your built executable in `target/release/${APP}`.
+
+## Install
+
+```
+sudo install target/release/${APP} /usr/local/bin/${APP}
+```
 
 ## Run
 
