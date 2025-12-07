@@ -1,15 +1,15 @@
 [package]
-name = "axum-dev"
-description = "axum-dev is a CLI tool"
+name = "${APP}"
+description = "${APP} is a CLI tool"
 version = "0.1.0"
 edition = "2024"
-repository = "https://github.com/enigmacurry/axum-dev"
-homepage = "https://github.com/enigmacurry/axum-dev"
+repository = "https://github.com/${GIT_USERNAME}/${APP}"
+homepage = "https://github.com/${GIT_USERNAME}/${APP}"
 license = "MIT"
 keywords = []
 categories = ["command-line-utilities"]
 readme = "README.md"
-documentation = "https://docs.rs/axum-dev"
+documentation = "https://docs.rs/${APP}"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage,coverage_nightly)'] }
