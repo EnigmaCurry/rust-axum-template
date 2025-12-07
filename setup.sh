@@ -9,14 +9,15 @@ source template/_scripts/funcs.sh
 debug_var ROOT_DIR
 
 # Set variables to be replaced in the template files
-export APP=$(
+export APP="$(
   git remote get-url origin |
     sed -E 's#.*/([^/]+)\.git$#\1#; t; s#.*/([^/]+)$#\1#; t; s#.*#app#'
-)
-export GIT_USERNAME=$(git remote get-url origin | sed -E 's/^(https:\/\/|git@github\.com:)([^\/]+).*$/\2/; t; s/.*/username/')
-export GIT_USERNAME=${GIT_USERNAME,,}
-export YEAR=$(date +%Y)
-export APP_PREFIX=${APP^^//[ -]/_}
+)"
+export GIT_USERNAME="$(git remote get-url origin | sed -E 's/^(https:\/\/|git@github\.com:)([^\/]+).*$/\2/; t; s/.*/username/')"
+export GIT_USERNAME="${GIT_USERNAME,,}"
+export YEAR="$(date +%Y)"
+export APP_PREFIX="${APP^^}"
+export APP_PREFIX="${APP_PREFIX//[ -]/_}"
 check_var APP GIT_USERNAME YEAR
 debug_var APP
 debug_var GIT_USERNAME
