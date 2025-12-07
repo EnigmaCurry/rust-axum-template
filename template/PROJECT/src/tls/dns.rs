@@ -501,7 +501,7 @@ pub fn format_acme_dns_cname_help(domains: &[String], fulldomain: &str) -> Strin
         if d.trim().is_empty() {
             continue;
         }
-        out.push_str(&format!("\ndig +short TXT _acme-challenge.{d} @1.1.1.1"));
+        out.push_str(&format!("\ndig +short CNAME _acme-challenge.{d} @1.1.1.1"));
     }
     out.push_str("\n");
     out
