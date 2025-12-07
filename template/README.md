@@ -15,7 +15,9 @@ Find your built executable in `target/release/${APP}`.
 ## Install
 
 ```
-sudo install target/release/${APP} /usr/local/bin/${APP}
+sudo install \
+  target/release/${APP} \
+  /usr/local/bin/${APP}
 ```
 
 ## Run
