@@ -18,6 +18,8 @@ export GIT_USERNAME="${GIT_USERNAME,,}"
 export YEAR="$(date +%Y)"
 export APP_PREFIX="${APP^^}"
 export APP_PREFIX="${APP_PREFIX//[ -]/_}"
+export APP_MODULE="${APP_PREFIX,,}"
+
 check_var APP GIT_USERNAME YEAR
 debug_var APP
 debug_var GIT_USERNAME
@@ -36,7 +38,7 @@ while IFS= read -r -d '' file; do
     mkdir -p "$(dirname "$DEST_PATH")"
 
     # Replace variables using envsubst and copy the file
-    envsubst '${APP} ${APP_PREFIX} ${GIT_USERNAME} ${YEAR}' < "$file" > "$DEST_PATH"
+    envsubst '${APP} ${APP_PREFIX} ${APP_MODULE} ${GIT_USERNAME} ${YEAR}' < "$file" > "$DEST_PATH"
     echo "Processed: $file -> $DEST_PATH"
 done < <(find "$TEMPLATE_DIR" -type f -print0)
 

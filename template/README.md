@@ -33,7 +33,7 @@ export NET_LISTEN_PORT=80
 export DATABASE_URL=sqlite:data.db
 export AUTH_METHOD=username_password
 export SESSION_SECURE=false
-export RUST_LOG=${APP_PREFIX}=info
+export RUST_LOG=${APP_MODULE}=info
 
 ${APP} serve
 ```
@@ -50,7 +50,7 @@ export SESSION_SECURE=true
 export TLS_MODE=manual
 export TLS_CERT_PATH=cert.pem
 export TLS_KEY_PATH=key.pem
-export RUST_LOG=${APP_PREFIX}=info
+export RUST_LOG=${APP_MODULE}=info
 
 ${APP} serve
 ```
@@ -70,7 +70,7 @@ export TLS_ACME_CHALLENGE=tls-alpn-01
 export TLS_ACME_DIRECTORY_URL=https://acme-v02.api.letsencrypt.org/directory
 export TLS_ACME_EMAIL=
 export TLS_CACHE_DIR=./tls-cache
-export RUST_LOG=${APP_PREFIX}=info
+export RUST_LOG=${APP_MODULE}=info
 
 ${APP} serve
 ```
@@ -91,7 +91,7 @@ export TLS_ACME_DIRECTORY_URL=https://acme-v02.api.letsencrypt.org/directory
 export TLS_ACME_EMAIL=
 export ACME_DNS_API_BASE=https://auth.acme-dns.io
 export TLS_CACHE_DIR=./tls-cache
-export RUST_LOG=${APP_PREFIX}=info
+export RUST_LOG=${APP_MODULE}=info
 
 ## Register ACME-DNS account 
 ## Follow the instructions it gies to create CNAME records:
@@ -113,7 +113,7 @@ export SESSION_SECURE=true
 export TLS_MODE=self-signed
 ## If TLS_CACHE_DIR is not set, self-signed certs are ephemeral:
 export TLS_CACHE_DIR=./tls-cache
-export RUST_LOG=${APP_PREFIX}=info
+export RUST_LOG=${APP_MODULE}=info
 
 ${APP} serve
 ```
