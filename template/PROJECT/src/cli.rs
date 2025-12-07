@@ -33,6 +33,7 @@ impl Cli {
         match &self.command {
             Commands::Serve(args) => args.validate(),
             Commands::Completions { .. } => Ok(()),
+            Commands::AcmeDnsRegister { .. } => Ok(()),
         }
     }
 }
@@ -48,9 +49,15 @@ pub enum Commands {
 
     /// Run the HTTP API server.
     Serve(ServeArgs),
+
+    /// Register or inspect acme-dns credentials used for DNS-01 ACME.
+    ///
+    /// Run this once before `serve` when using `--tls-mode=acme --tls-acme-challenge=dns-01`,
+    /// unless you are providing ACME_DNS_* credentials explicitly.
+    AcmeDnsRegister(AcmeDnsRegisterArgs),
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 pub struct ServeArgs {
     #[command(flatten)]
     pub network: NetworkArgs,
@@ -74,7 +81,7 @@ impl ServeArgs {
     }
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 pub struct NetworkArgs {
     /// IP to bind (or set NET_LISTEN_IP).
     #[arg(
@@ -95,9 +102,18 @@ pub struct NetworkArgs {
         help_heading = "Network"
     )]
     pub listen_port: u16,
+
+    /// Primary public hostname for this app (used as the default TLS CN).
+    #[arg(
+        long = "net-host",
+        env = "NET_HOST",
+        value_name = "DNSNAME",
+        help_heading = "Network"
+    )]
+    pub net_host: Option<String>,
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 pub struct DatabaseArgs {
     /// Database URL for sqlx (or set DATABASE_URL).
     #[arg(
@@ -110,7 +126,7 @@ pub struct DatabaseArgs {
     pub database_url: String,
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 pub struct SessionArgs {
     /// Whether to set the Secure flag on session cookies.
     /// (true/false or set SESSION_SECURE=true/false).
@@ -146,7 +162,7 @@ pub struct SessionArgs {
     pub session_expiry_seconds: u64,
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 pub struct AuthArgs {
     /// Authentication method to use: forward_auth or username_password.
     #[arg(
@@ -226,7 +242,7 @@ pub enum TlsAcmeChallenge {
     Dns01,
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 pub struct TlsArgs {
     /// TLS mode to use: none, manual, acme, or self-signed.
     #[arg(
@@ -321,6 +337,14 @@ pub struct TlsArgs {
         help_heading = "TLS"
     )]
     pub self_signed_valid_days: u32,
+    #[arg(
+        long = "acme-dns-api-base",
+        env = "ACME_DNS_API_BASE",
+        value_name = "URL",
+        default_value = "https://auth.acme-dns.io",
+        help_heading = "ACME-DNS"
+    )]
+    pub acme_dns_api_base: String,
 }
 
 impl TlsArgs {
@@ -344,6 +368,66 @@ impl TlsArgs {
 
         Ok(())
     }
+}
+
+#[derive(Args, Debug)]
+pub struct AcmeDnsRegisterArgs {
+    /// Base URL of the acme-dns API (e.g. https://auth.acme-dns.io).
+    #[arg(
+        long = "acme-dns-api-base",
+        env = "ACME_DNS_API_BASE",
+        value_name = "URL",
+        default_value = "https://auth.acme-dns.io",
+        help_heading = "ACME-DNS"
+    )]
+    pub api_base: String,
+
+    /// Directory to store acme-dns credentials (defaults to TLS cache dir).
+    ///
+    /// If not set, we will default to "./tls-cache".
+    #[arg(
+        long = "tls-cache-dir",
+        env = "TLS_CACHE_DIR",
+        value_name = "DIR",
+        help_heading = "ACME-DNS"
+    )]
+    pub cache_dir: Option<String>,
+
+    /// Optional CIDR ranges allowed to call the acme-dns /update API.
+    ///
+    /// This is passed through to the acme-dns `allowfrom` field.
+    #[arg(
+        long = "acme-dns-allowfrom",
+        env = "ACME_DNS_ALLOWFROM",
+        value_name = "CIDR",
+        value_delimiter = ',',
+        num_args = 0..,
+        help_heading = "ACME-DNS"
+    )]
+    pub allowfrom: Vec<String>,
+
+    /// Primary public hostname.
+    #[arg(
+        long = "net-host",
+        env = "NET_HOST",
+        value_name = "DNSNAME",
+        help_heading = "ACME-DNS"
+    )]
+    pub net_host: Option<String>,
+
+    /// Additional DNS SubjectAltNames (SANs) for the TLS certificate.
+    ///
+    /// APP_HOST is used as the primary Common Name (CN); these names are added
+    /// as SubjectAltNames. Used for ACME and self-signed modes.
+    #[arg(
+        long = "tls-san",
+        env = "TLS_SANS",
+        value_name = "DNSNAME",
+        num_args = 0..,
+        value_delimiter = ',',
+        help_heading = "TLS"
+    )]
+    pub sans: Vec<String>,
 }
 
 pub fn app() -> clap::Command {

@@ -3,41 +3,47 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use schemars::JsonSchema;
 use serde::Serialize;
-use std::backtrace::Backtrace;
-use std::error::Error;
-use std::{fmt, io};
-use tracing::error;
+use std::{backtrace::Backtrace, io};
+use thiserror::Error;
 
-#[derive(Debug)]
+//
+// CLI errors
+//
+
+#[derive(Debug, Error)]
 pub enum CliError {
-    Io(io::Error),
+    /// I/O errors (file/FD issues etc.)
+    #[error("I/O error: {0}")]
+    Io(#[from] io::Error),
+
+    /// Argument / parsing issues (usually clap output).
+    /// The message is printed verbatim so clap's formatting is preserved.
+    #[error("{0}")]
     InvalidArgs(String),
+
+    /// Unsupported shell for completions.
+    #[error("Unsupported shell: {0}")]
     UnsupportedShell(String),
+
+    /// Runtime failures (server errors, ACME flows, etc).
+    /// The inner string is printed as-is by main().
+    #[error("{0}")]
     RuntimeError(String),
 }
-impl fmt::Display for CliError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            CliError::Io(e) => write!(f, "I/O error: {e}"),
-            CliError::UnsupportedShell(s) => write!(f, "Unsupported shell: {s}"),
-            CliError::InvalidArgs(s) => write!(f, "Invalid args: {s}"),
-            CliError::RuntimeError(s) => write!(f, "Runtime error: {s}"),
-        }
-    }
-}
-impl Error for CliError {}
-impl From<io::Error> for CliError {
-    fn from(e: io::Error) -> Self {
-        CliError::Io(e)
-    }
-}
 
-#[derive(Debug, Serialize, JsonSchema)]
+//
+// HTTP / application errors
+//
+
+#[derive(Debug, Serialize, JsonSchema, Error)]
+#[error("{inner}")]
 pub struct AppError {
     #[serde(skip)]
     pub status: StatusCode,
+
     #[serde(skip)]
     pub inner: anyhow::Error,
+
     #[serde(skip)]
     #[allow(dead_code)]
     pub backtrace: Option<Backtrace>,
@@ -74,9 +80,11 @@ impl AppError {
     pub fn unauthorized(message: &str) -> Self {
         Self::with_status(StatusCode::UNAUTHORIZED, anyhow!(message.to_owned()))
     }
+
     pub fn forbidden(message: &str) -> Self {
         Self::with_status(StatusCode::FORBIDDEN, anyhow!(message.to_owned()))
     }
+
     pub fn internal(message: &str) -> Self {
         Self::with_status(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -85,12 +93,21 @@ impl AppError {
     }
 }
 
-// generic conversion for normal error types
-impl<E> From<E> for AppError
-where
-    E: std::error::Error + Send + Sync + 'static,
-{
-    fn from(err: E) -> Self {
+impl From<anyhow::Error> for AppError {
+    fn from(err: anyhow::Error) -> Self {
+        AppError::new(err)
+    }
+}
+
+impl From<tower_sessions::session::Error> for AppError {
+    fn from(err: tower_sessions::session::Error) -> Self {
+        // treat it as an internal error; you can specialize this later if you want
+        AppError::new(err)
+    }
+}
+
+impl From<sqlx::Error> for AppError {
+    fn from(err: sqlx::Error) -> Self {
         AppError::new(err)
     }
 }

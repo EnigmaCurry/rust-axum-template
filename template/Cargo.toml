@@ -1,5 +1,5 @@
 [workspace]
 members = [
-    "${APP}",
-    "api_doc_macros",
+  "${APP}",
+  "api-doc-macros",
 ]

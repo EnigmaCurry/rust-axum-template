@@ -4,13 +4,22 @@ use crate::{
     },
     prelude::*,
     routes::router,
-    tls::{ensure_rustls_crypto_provider, generate_self_signed_with_validity},
+    tls::{
+        dns::{AcmeDnsProvider, obtain_certificate_with_dns01},
+        generate::{ensure_rustls_crypto_provider, generate_self_signed_with_validity},
+    },
 };
+use anyhow::Context;
 use axum_server::{Handle, tls_rustls::RustlsConfig};
 use futures_util::StreamExt;
 use rustls::ServerConfig as RustlsServerConfig;
 use sqlx::{ConnectOptions, SqlitePool, sqlite::SqliteConnectOptions};
-use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    net::SocketAddr,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 use tokio::fs;
 use tokio::task::AbortHandle;
 use tokio_rustls_acme::{AcmeConfig, caches::DirCache};
@@ -46,11 +55,22 @@ pub enum TlsConfig {
     /// ACME (Let's Encrypt or other CA) via TLS-ALPN-01.
     ///
     /// Certificates and account data are stored in `cache_dir`.
-    Acme {
+    AcmeTlsAlpn01 {
         directory_url: String,
         cache_dir: PathBuf,
         domains: Vec<String>,
         contact_email: Option<String>,
+    },
+
+    /// ACME via **DNS-01**, using a DNS provider (e.g. acme-dns).
+    ///
+    /// Certificates and account data are stored in `cache_dir`.
+    AcmeDns01 {
+        directory_url: String,
+        cache_dir: PathBuf,
+        domains: Vec<String>,
+        contact_email: Option<String>,
+        acme_dns_api_base: String,
     },
 }
 
@@ -65,6 +85,15 @@ pub async fn run(
     session_check_secs: u64,
     tls_config: TlsConfig,
 ) -> anyhow::Result<()> {
+    // Helpful to see where we're running from
+    let cwd =
+        std::env::current_dir().with_context(|| "failed to determine current working directory")?;
+    tracing::info!(
+        "server::run starting; cwd='{}', db_url='{}'",
+        cwd.display(),
+        db_url
+    );
+
     // Database pool and migration
     let connect_opts = SqliteConnectOptions::from_str(&db_url)?
         .create_if_missing(true)
@@ -107,16 +136,31 @@ pub async fn run(
 
     match tls_config {
         TlsConfig::Http => {
-            let listener = tokio::net::TcpListener::bind(addr).await?;
-            let bound_addr = listener.local_addr()?;
-            info!("listening on http://{bound_addr}");
+            match tokio::net::TcpListener::bind(addr).await {
+                Ok(listener) => {
+                    let bound_addr = listener.local_addr()?;
+                    info!("listening on http://{bound_addr}");
 
-            axum::serve(
-                listener,
-                app.into_make_service_with_connect_info::<SocketAddr>(),
-            )
-            .with_graceful_shutdown(shutdown_signal(deletion_task.abort_handle(), None))
-            .await?;
+                    axum::serve(
+                        listener,
+                        app.into_make_service_with_connect_info::<SocketAddr>(),
+                    )
+                    .with_graceful_shutdown(shutdown_signal(deletion_task.abort_handle(), None))
+                    .await?;
+                }
+                Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
+                    // Privileged-port helper message
+                    return Err(anyhow::anyhow!(
+                        "Failed to bind to {addr}: Permission denied (os error 13).\n\
+             On Unix-like systems, binding to ports below 1024 (like 80 or 443) \
+             requires elevated privileges (e.g., running as root or with CAP_NET_BIND_SERVICE).\n\
+             Either:\n  - run this binary with appropriate privileges, or\n  - use a higher port (e.g. 3000) and put a reverse proxy (nginx, caddy, traefik) in front."
+                    ));
+                }
+                Err(e) => {
+                    return Err(anyhow::anyhow!("Failed to bind to {addr}: {e}"));
+                }
+            }
         }
         TlsConfig::RustlsFiles {
             cert_path,
@@ -144,10 +188,25 @@ pub async fn run(
 
             info!("listening on https://{addr}");
 
-            axum_server::bind_rustls(addr, rustls_config)
+            let server = axum_server::bind_rustls(addr, rustls_config)
                 .handle(handle)
-                .serve(app.into_make_service_with_connect_info::<SocketAddr>())
-                .await?;
+                .serve(app.into_make_service_with_connect_info::<SocketAddr>());
+
+            if let Err(e) = server.await {
+                // axum_server error is usually an io::Error under the hood, but we only
+                // get it via its Display. So we pattern-match on the string to detect EACCES.
+                let msg = e.to_string();
+                if msg.contains("Permission denied") {
+                    return Err(anyhow::anyhow!(
+                        "Failed to start HTTPS listener on {addr}: {msg}\n\
+             This usually means you're trying to bind to a privileged port \
+             (below 1024, such as 443) without sufficient privileges.\n\
+             Either:\n  - run with appropriate permissions (root or CAP_NET_BIND_SERVICE), or\n  - listen on a higher port (e.g. 3000) and front it with a reverse proxy."
+                    ));
+                } else {
+                    return Err(anyhow::anyhow!("HTTPS server failed on {addr}: {e}"));
+                }
+            }
 
             // Make sure the shutdown task has finished (and bubble up any errors)
             shutdown_task.await?;
@@ -274,21 +333,38 @@ pub async fn run(
 
             info!("listening on https://{addr} (self-signed)");
 
-            axum_server::bind_rustls(addr, rustls_config)
+            let server = axum_server::bind_rustls(addr, rustls_config)
                 .handle(handle)
-                .serve(app.into_make_service_with_connect_info::<SocketAddr>())
-                .await?;
+                .serve(app.into_make_service_with_connect_info::<SocketAddr>());
+
+            if let Err(e) = server.await {
+                // axum_server error is usually an io::Error under the hood, but we only
+                // get it via its Display. So we pattern-match on the string to detect EACCES.
+                let msg = e.to_string();
+                if msg.contains("Permission denied") {
+                    return Err(anyhow::anyhow!(
+                        "Failed to start HTTPS listener on {addr}: {msg}\n\
+             This usually means you're trying to bind to a privileged port \
+             (below 1024, such as 443) without sufficient privileges.\n\
+             Either:\n  - run with appropriate permissions (root or CAP_NET_BIND_SERVICE), or\n  - listen on a higher port (e.g. 3000) and front it with a reverse proxy."
+                    ));
+                } else {
+                    return Err(anyhow::anyhow!("HTTPS server failed on {addr}: {e}"));
+                }
+            }
 
             shutdown_task.await?;
         }
-        TlsConfig::Acme {
+        TlsConfig::AcmeTlsAlpn01 {
             directory_url,
             cache_dir,
             domains,
             contact_email,
         } => {
             // Ensure cache dir exists
-            fs::create_dir_all(&cache_dir).await?;
+            fs::create_dir_all(&cache_dir).await.with_context(|| {
+                format!("failed to create TLS cache dir '{}'", cache_dir.display())
+            })?;
 
             info!(
                 "Starting ACME TLS (tls-alpn-01) – directory_url='{}', cache_dir='{}', domains={:?}, contact_email={:?}",
@@ -339,11 +415,196 @@ pub async fn run(
 
             info!("listening on https://{addr} (ACME)");
 
-            axum_server::bind(addr)
+            let server = axum_server::bind(addr)
                 .handle(handle)
                 .acceptor(acceptor)
-                .serve(app.into_make_service_with_connect_info::<SocketAddr>())
-                .await?;
+                .serve(app.into_make_service_with_connect_info::<SocketAddr>());
+
+            if let Err(e) = server.await {
+                // axum_server error is usually an io::Error under the hood, but we only
+                // get it via its Display. So we pattern-match on the string to detect EACCES.
+                let msg = e.to_string();
+                if msg.contains("Permission denied") {
+                    return Err(anyhow::anyhow!(
+                        "Failed to start HTTPS listener on {addr}: {msg}\n\
+             This usually means you're trying to bind to a privileged port \
+             (below 1024, such as 443) without sufficient privileges.\n\
+             Either:\n  - run with appropriate permissions (root or CAP_NET_BIND_SERVICE), or\n  - listen on a higher port (e.g. 3000) and front it with a reverse proxy."
+                    ));
+                } else {
+                    return Err(anyhow::anyhow!("HTTPS server failed on {addr}: {e}"));
+                }
+            }
+
+            shutdown_task.await?;
+        }
+        TlsConfig::AcmeDns01 {
+            directory_url,
+            cache_dir,
+            domains,
+            contact_email,
+            acme_dns_api_base,
+        } => {
+            // Ensure cache dir exists
+            fs::create_dir_all(&cache_dir).await?;
+
+            info!(
+                "Starting ACME TLS (dns-01) – directory_url='{}', cache_dir='{}', domains={:?}, contact_email={:?}",
+                directory_url,
+                cache_dir.display(),
+                domains,
+                contact_email,
+            );
+
+            // Paths to cache the issued certificate + key.
+            let cert_path = cache_dir.join("acme-dns01-cert.pem");
+            let key_path = cache_dir.join("acme-dns01-key.pem");
+
+            // Try to reuse a cached, still-valid certificate if present.
+            let (cert_pem, key_pem) = {
+                use rustls_pemfile::certs as load_pem_certs;
+                use x509_parser::prelude::*;
+
+                let use_cached = if cert_path.exists() && key_path.exists() {
+                    match fs::read(&cert_path).await {
+                        Ok(pem_bytes) => {
+                            let mut slice: &[u8] = &pem_bytes;
+                            let mut iter = load_pem_certs(&mut slice);
+
+                            match iter.next().transpose() {
+                                Ok(Some(der)) => match parse_x509_certificate(der.as_ref()) {
+                                    Ok((_rem, x509)) => {
+                                        let validity = x509.validity();
+                                        let now = ASN1Time::now();
+                                        if validity.is_valid_at(now) {
+                                            info!(
+                                                "Using cached ACME dns-01 certificate from '{}'",
+                                                cert_path.display()
+                                            );
+                                            true
+                                        } else {
+                                            info!(
+                                                "Cached ACME dns-01 cert at '{}' is expired/invalid; requesting a new one",
+                                                cert_path.display()
+                                            );
+                                            false
+                                        }
+                                    }
+                                    Err(err) => {
+                                        info!(
+                                            "Failed to parse cached ACME dns-01 cert '{}': {err}; requesting a new one",
+                                            cert_path.display()
+                                        );
+                                        false
+                                    }
+                                },
+                                Ok(None) => {
+                                    info!(
+                                        "Cached ACME dns-01 cert '{}' has no certificates; requesting a new one",
+                                        cert_path.display()
+                                    );
+                                    false
+                                }
+                                Err(err) => {
+                                    info!(
+                                        "Failed to decode PEM for cached ACME dns-01 cert '{}': {err}; requesting a new one",
+                                        cert_path.display()
+                                    );
+                                    false
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            info!(
+                                "Failed to read cached ACME dns-01 cert '{}': {err}; requesting a new one",
+                                cert_path.display()
+                            );
+                            false
+                        }
+                    }
+                } else {
+                    // No cached files yet.
+                    false
+                };
+
+                if use_cached {
+                    let cert = fs::read(&cert_path).await?;
+                    let key = fs::read(&key_path).await?;
+                    (cert, key)
+                } else {
+                    info!(
+                        "Requesting new ACME dns-01 certificate (directory_url='{}', domains={:?})",
+                        directory_url, domains
+                    );
+
+                    // Build DNS provider from cached creds + CLI api_base.
+                    let dns_provider = AcmeDnsProvider::from_cache(&acme_dns_api_base, &cache_dir)
+                        .await?
+                        .into_shared();
+
+                    let (cert_pem, key_pem) = obtain_certificate_with_dns01(
+                        &directory_url,
+                        contact_email.as_deref(),
+                        &domains,
+                        dns_provider.as_ref(),
+                        &cache_dir,
+                    )
+                    .await
+                    .map_err(|e| anyhow::anyhow!("ACME dns-01 flow failed: {e:#}"))?;
+
+                    // Persist cert + key for next run.
+                    fs::write(&cert_path, &cert_pem).await.with_context(|| {
+                        format!(
+                            "failed to write ACME dns-01 certificate to '{}'",
+                            cert_path.display()
+                        )
+                    })?;
+                    fs::write(&key_path, &key_pem).await.with_context(|| {
+                        format!(
+                            "failed to write ACME dns-01 key to '{}'",
+                            key_path.display()
+                        )
+                    })?;
+
+                    info!(
+                        "Wrote ACME dns-01 certificate to '{}' and key to '{}'",
+                        cert_path.display(),
+                        key_path.display()
+                    );
+
+                    (cert_pem, key_pem)
+                }
+            };
+
+            let rustls_config = RustlsConfig::from_pem(cert_pem, key_pem).await?;
+
+            let handle = Handle::new();
+            let shutdown_task = tokio::spawn(shutdown_signal(
+                deletion_task.abort_handle(),
+                Some(handle.clone()),
+            ));
+
+            info!("listening on https://{addr} (ACME dns-01)");
+
+            let server = axum_server::bind_rustls(addr, rustls_config)
+                .handle(handle)
+                .serve(app.into_make_service_with_connect_info::<SocketAddr>());
+
+            if let Err(e) = server.await {
+                // axum_server error is usually an io::Error under the hood, but we only
+                // get it via its Display. So we pattern-match on the string to detect EACCES.
+                let msg = e.to_string();
+                if msg.contains("Permission denied") {
+                    return Err(anyhow::anyhow!(
+                        "Failed to start HTTPS listener on {addr}: {msg}\n\
+             This usually means you're trying to bind to a privileged port \
+             (below 1024, such as 443) without sufficient privileges.\n\
+             Either:\n  - run with appropriate permissions (root or CAP_NET_BIND_SERVICE), or\n  - listen on a higher port (e.g. 3000) and front it with a reverse proxy."
+                    ));
+                } else {
+                    return Err(anyhow::anyhow!("HTTPS server failed on {addr}: {e}"));
+                }
+            }
 
             shutdown_task.await?;
         }

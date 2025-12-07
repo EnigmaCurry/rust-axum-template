@@ -1,13 +1,14 @@
 use axum::http::HeaderName;
 use clap::{CommandFactory, Parser, error::ErrorKind};
 use clap_complete::shells::Shell;
-use cli::{TlsAcmeChallenge, TlsMode};
+use cli::{AcmeDnsRegisterArgs, TlsAcmeChallenge, TlsMode};
 use errors::CliError;
 use middleware::auth::AuthenticationMethod;
 use std::env;
 use std::io::Write;
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
+use tls::dns::{format_acme_dns_cname_help, register_acme_dns_account};
 use tracing_subscriber::EnvFilter;
 
 mod api_docs;
@@ -25,14 +26,19 @@ mod tls;
 use crate::cli::{Cli, Commands, ServeArgs};
 use prelude::*;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
+    println!("ok");
     init_tracing();
-    run_cli(
+    if let Err(e) = run_cli(
         std::env::args_os(),
         &mut std::io::stdout(),
         &mut std::io::stderr(),
-    )?;
-    Ok(())
+    ) {
+        error!("run_cli failed: {:?}", e);
+        // Print only the user-facing message
+        eprintln!("{e}");
+        std::process::exit(1);
+    }
 }
 
 fn init_tracing() {
@@ -54,6 +60,7 @@ where
     let cli = match Cli::try_parse_from(args) {
         Ok(cli) => cli,
         Err(e) => {
+            debug!("CLI parsing error: kind={:?}, error={}", e.kind(), e);
             match e.kind() {
                 ErrorKind::DisplayHelp
                 | ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
@@ -81,16 +88,27 @@ where
     .or_else(|| env::var("RUST_LOG").ok())
     .unwrap_or_else(|| "info".to_string());
 
-    let _ = env_logger::Builder::new()
-        .filter_level(log::LevelFilter::from_str(&log_level).unwrap_or(log::LevelFilter::Info))
+    let level = log::LevelFilter::from_str(&log_level).unwrap_or(log::LevelFilter::Info);
+
+    match env_logger::Builder::new()
+        .filter_level(level)
         .format_timestamp_secs()
-        .try_init();
-    debug!("logging initialized.");
+        .try_init()
+    {
+        Ok(_) => {
+            debug!("env_logger initialized with level {level:?}");
+        }
+        Err(err) => {
+            // This will go through tracing_subscriber, which we already set up in init_tracing()
+            warn!("env_logger initialization failed (a logger may already be set): {err}");
+        }
+    }
 
     // Dispatch subcommands using strongly-typed enums instead of ArgMatches.
     match cli.command {
         Commands::Completions { shell } => completions(shell, out, err),
         Commands::Serve(args) => serve(args, out, err),
+        Commands::AcmeDnsRegister(args) => acme_dns_register(args, out, err),
     }
 }
 
@@ -202,15 +220,7 @@ fn serve<W1: Write, W2: Write>(
             }
         }
         TlsMode::Acme => {
-            // For now we only support TLS-ALPN-01, which is what tokio-rustls-acme uses.
-            if args.tls.acme_challenge != TlsAcmeChallenge::TlsAlpn01 {
-                return Err(CliError::InvalidArgs(
-                    "Only TLS-ALPN-01 is supported for ACME at the moment. \
-                     Use --tls-acme-challenge=tls-alpn-01."
-                        .to_string(),
-                ));
-            }
-
+            // Shared bits: cache dir, domains, directory URL, email
             let cache_dir_str = args.tls.cache_dir.clone().ok_or_else(|| {
                 CliError::InvalidArgs(
                     "TLS cache directory is required when --tls-mode=acme. \
@@ -220,7 +230,6 @@ fn serve<W1: Write, W2: Write>(
             })?;
             let cache_dir = PathBuf::from(cache_dir_str);
 
-            // Determine domains: use --tls-san / TLS_SANS, falling back to APP_HOST
             let mut domains: Vec<String> = args
                 .tls
                 .sans
@@ -229,40 +238,77 @@ fn serve<W1: Write, W2: Write>(
                 .filter(|s| !s.trim().is_empty())
                 .collect();
 
-            if domains.is_empty() {
-                if let Ok(app_host) = env::var("APP_HOST") {
-                    domains.push(app_host);
-                } else {
-                    return Err(CliError::InvalidArgs(
-                        "ACME mode requires at least one domain. \
-                         Provide --tls-san or set APP_HOST."
-                            .to_string(),
-                    ));
+            if let Some(ref host) = args.network.net_host {
+                if !host.trim().is_empty() {
+                    domains.push(host.clone());
                 }
+            }
+
+            // Dedup while preserving order.
+            let mut seen = std::collections::BTreeSet::new();
+            domains.retain(|d| seen.insert(d.clone()));
+
+            if domains.is_empty() {
+                return Err(CliError::InvalidArgs(
+                    "ACME mode requires at least one domain. \
+         Provide --tls-san and/or --app-host (or APP_HOST)."
+                        .to_string(),
+                ));
             }
 
             let directory_url = args.tls.acme_directory_url.clone();
             let contact_email = args.tls.acme_email.clone();
 
-            info!(
-                "TLS mode: acme (TLS-ALPN-01) – directory_url={}, cache_dir={}, domains={:?}, contact_email={:?}",
-                directory_url,
-                cache_dir.display(),
-                domains,
-                contact_email,
-            );
+            match args.tls.acme_challenge {
+                TlsAcmeChallenge::TlsAlpn01 => {
+                    info!(
+                        "TLS mode: acme (TLS-ALPN-01) – directory_url={}, cache_dir={}, domains={:?}, contact_email={:?}",
+                        directory_url,
+                        cache_dir.display(),
+                        domains,
+                        contact_email,
+                    );
 
-            server::TlsConfig::Acme {
-                directory_url,
-                cache_dir,
-                domains,
-                contact_email,
+                    server::TlsConfig::AcmeTlsAlpn01 {
+                        directory_url,
+                        cache_dir,
+                        domains,
+                        contact_email,
+                    }
+                }
+
+                TlsAcmeChallenge::Dns01 => {
+                    info!(
+                        "TLS mode: acme (DNS-01) – directory_url={}, cache_dir={}, domains={:?}, contact_email={:?}, acme_dns_api_base={:?}",
+                        directory_url,
+                        cache_dir.display(),
+                        domains,
+                        contact_email,
+                        args.tls.acme_dns_api_base.clone(),
+                    );
+
+                    server::TlsConfig::AcmeDns01 {
+                        directory_url,
+                        cache_dir,
+                        domains,
+                        contact_email,
+                        acme_dns_api_base: args.tls.acme_dns_api_base.clone(),
+                    }
+                }
+
+                TlsAcmeChallenge::Http01 => {
+                    return Err(CliError::InvalidArgs(
+                        "HTTP-01 is not supported yet. \
+                         Use --tls-acme-challenge=tls-alpn-01 or dns-01."
+                            .to_string(),
+                    ));
+                }
             }
         }
     };
 
     // --- Database + session config ---
-    let db_url = args.database.database_url;
+    let db_url = args.clone().database.database_url;
 
     let session_secure = args.session.session_secure;
     let session_expiry_secs = args.session.session_expiry_seconds;
@@ -327,9 +373,21 @@ fn serve<W1: Write, W2: Write>(
         );
     }
 
+    debug!("serve(): parsed args = {:?}", args.clone());
+    info!("Server will listen on {addr} (from {addr_str})");
+    info!("Database URL: {db_url}");
+    debug!(
+        "Session config: secure={}, expiry_secs={}, check_secs={}",
+        session_secure, session_expiry_secs, session_check_secs
+    );
+
     let rt = match tokio::runtime::Runtime::new() {
-        Ok(rt) => rt,
+        Ok(rt) => {
+            debug!("Tokio runtime created successfully");
+            rt
+        }
         Err(e) => {
+            error!("Failed to create Tokio runtime: {e}");
             return Err(CliError::RuntimeError(format!(
                 "Failed to start Tokio runtime: {e}"
             )));
@@ -347,8 +405,84 @@ fn serve<W1: Write, W2: Write>(
         tls_config,
     )) {
         Ok(()) => Ok(()),
-        Err(e) => Err(CliError::RuntimeError(format!("Server error: {e:#}"))),
+        Err(e) => {
+            // Log full context to the logger
+            error!("server::run failed: {:#}", e);
+
+            // And propagate the full chain back to the user
+            Err(CliError::RuntimeError(format!("{:#}", e)))
+        }
     }
+}
+
+fn acme_dns_register<W1: Write, W2: Write>(
+    args: AcmeDnsRegisterArgs,
+    out: &mut W1,
+    _err: &mut W2,
+) -> Result<(), CliError> {
+    // Where to store creds
+    let cache_dir = PathBuf::from(args.cache_dir.unwrap_or_else(|| "./tls-cache".to_string()));
+
+    // Build domain list from NET_HOST + TLS_SANS for CNAME hints
+    let mut domains: Vec<String> = Vec::new();
+
+    if let Some(ref host) = args.net_host {
+        if !host.trim().is_empty() {
+            domains.push(host.clone());
+        }
+    }
+
+    for s in &args.sans {
+        if !s.trim().is_empty() {
+            domains.push(s.clone());
+        }
+    }
+
+    // Dedup
+    let mut seen = std::collections::BTreeSet::new();
+    domains.retain(|d| seen.insert(d.clone()));
+
+    // Build allow_from
+    let allowfrom_opt = if args.allowfrom.is_empty() {
+        None
+    } else {
+        Some(args.allowfrom.clone())
+    };
+
+    let rt = tokio::runtime::Runtime::new()
+        .map_err(|e| CliError::RuntimeError(format!("Failed to start Tokio runtime: {e}")))?;
+
+    let (creds, created_new) = rt
+        .block_on(register_acme_dns_account(
+            &args.api_base,
+            &cache_dir,
+            &domains,
+            allowfrom_opt.as_deref(),
+        ))
+        .map_err(|e| CliError::RuntimeError(e.to_string()))?;
+
+    let cred_path = cache_dir.join("acme-dns-credentials.json");
+
+    if created_new {
+        writeln!(
+            out,
+            "Registered new acme-dns account and wrote credentials to:\n  {}\n",
+            cred_path.display()
+        )?;
+    } else {
+        writeln!(
+            out,
+            "Using existing acme-dns account credentials from:\n  {}\n",
+            cred_path.display()
+        )?;
+    }
+
+    writeln!(out, "acme-dns fulldomain:\n  {}", creds.fulldomain)?;
+
+    let cname_help = format_acme_dns_cname_help(&domains, &creds.fulldomain);
+    write!(out, "{cname_help}")?;
+
+    Ok(())
 }
 
 #[test]
