@@ -162,7 +162,7 @@ ${APP} serve
 
 ## Development
 
-For development, you advised to install
+For development, you are advised to install
 [just](https://github.com/casey/just) and use the targets defined in
 the [Justfile](Justfile).
 
