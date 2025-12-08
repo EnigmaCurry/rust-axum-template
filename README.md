@@ -1,7 +1,7 @@
 # rust-axum-template
 
-This is my [Axum](https://github.com/tokio-rs/axum) template for new
-Rust projects.
+This is my [Axum](https://github.com/tokio-rs/axum) server template for new
+Rust web projects.
 
 This is ALPHA software in-development.
 
