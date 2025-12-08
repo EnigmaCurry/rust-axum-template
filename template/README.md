@@ -4,6 +4,44 @@
 )](https://crates.io/crates/${APP})
 [![Coverage](https://img.shields.io/badge/Coverage-Report-purple)](https://${GIT_USERNAME}.github.io/${APP}/coverage/master/)
 
+## Features
+
+ * Single binary deployment.
+ * Embedded SQLite database.
+ * RESTFul JSON API built with
+   [axum](https://github.com/tokio-rs/axum).
+ * Builtin TLS with the following modes:
+   * ACME supporting TLS-ALPN-01 and DNS-01 challenge types. (e.g.,
+     when you need a production certificate from Let's Encrypt.)
+   * Automatic TLS with self-signed certificate (e.g., when using
+     certificate pinning).
+   * TLS with a provided certificate and key file (e.g., `.pem` files
+     that you rotate manually).
+   * None (plain HTTP) (e.g., when deployed behind a reverse proxy
+     that terminates TLS on its behalf).
+ * OpenAPI specification built with
+   [aide](https://github.com/tamasfe/aide/).
+ * Interactive API docs with your choice of
+   [Scalar](https://github.com/ScalaR/ScalaR),
+   [Redoc](https://github.com/Redocly/redoc), or [Swagger
+   UI](https://github.com/swagger-api/swagger-ui?tab=readme-ov-file).
+ * Multiple user authentication backends:
+   * Username / Password.
+   * Forward Auth via trusted header (Traefik Proxy or compatible proxy layer).
+   * Todo: OAuth (OIDC).
+ * Admin web interface.
+ * [Just](https://github.com/casey/just) enabled project build
+   targets.
+ * [Clap](https://docs.rs/clap/latest/clap/) CLI argument parser.
+ * Bash / Fish / Zsh shell (tab)
+   [completion](https://docs.rs/clap_complete/latest/clap_complete/).
+ * GitHub actions for tests and releases:
+   * Builds executables for multiple platforms.
+   * Builds Docker images for x86_64 and aarch64.
+   * Test coverage report published to GitHub pages.
+   * Publishing crates to crates.io (disabled by default, uncomment in
+   [release.yml](template/.github/workflows/release.yml)).
+
 ## Build
 
 ```
@@ -124,4 +162,31 @@ ${APP} serve
 
 ## Development
 
-See [DEVELOPMENT.md](DEVELOPMENT.md)
+For development, you advised to install
+[just](https://github.com/casey/just) and use the targets defined in
+the [Justfile](Justfile).
+
+## Configure the .env file
+
+```
+just config
+```
+
+This will copy the provided [.env-dist](template/.env-dist) to `.env`.
+You should edit the generated `.env` file by hand to configure your
+application.
+
+You can set an alternative `.env` file path by setting the `ENV_FILE`
+environment variable.
+
+## Run the program
+
+```
+just run [ARGS ...]
+```
+
+You can also run the binary directly by building manually (`just
+build`) and running the static binary
+`{{app_name}}/target/debug/{{app_name}}`.
+
+Also see [DEVELOPMENT.md](DEVELOPMENT.md)

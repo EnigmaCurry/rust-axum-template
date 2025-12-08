@@ -11,38 +11,15 @@ This is ALPHA software in-development.
 
 ## Features
 
- * Builds a single binary containing RESTful API server and SvelteKit
-   frontend.
- * Embedded SQLite database.
- * Configurable TLS:
-   * plain HTTP.
-   * manual certificate and key file.
-   * self-signed TLS certificate.
-   * ACME TLS-ALPN-01
- * OpenAPI specification and Scalar test interface for the API.
- * Multiple user authentication backends:
-   * Username / Password
-   * Forward Auth via trusted header (Traefik Proxy or compatible proxy layer)
-   * Todo: OAuth (OIDC)
- * Admin web interface.
- * [Just](https://github.com/casey/just) enabled project build
-   targets.
- * [Clap](https://docs.rs/clap/latest/clap/) CLI argument parser.
- * Bash / Fish / Zsh shell (tab)
-   [completion](https://docs.rs/clap_complete/latest/clap_complete/).
- * GitHub actions for tests and releases:
-   * Builds executables for multiple platforms.
-   * Builds Docker images for x86_64 and aarch64.
-   * Test coverage report published to GitHub pages.
-   * Publishing crates to crates.io (disabled by default, uncomment in
-   [release.yml](template/.github/workflows/release.yml)).
+For full list of features, see the embedded
+[README.md](template/README.md) inside the template.
 
-## Use this template
+## How to use this template
 
  * [Create a new repository using this template](https://github.com/new?template_name=rust-axum-template&template_owner=EnigmaCurry).
- * The `Repository name` that you choose will also be used as your new app's name.
- * If you have enabled code coverage reports (it's on by default), go
-   to the GitHub repository `Settings` page:
+ * The `Repository name` that you choose will also become the name of
+   your new app.
+ * Go to the GitHub repository `Settings` page:
    * Find `Pages`.
    * Find `Build and deployment`.
    * Find `Source` and set it to `GitHub Actions`. (**Not** `Deploy
@@ -52,8 +29,11 @@ This is ALPHA software in-development.
 
 ```
 ## For example:
+FORGE=github.com
+USERNAME=your_username
+REPOSITORY=your_repository
 
-git clone git@github.com:${USERNAME}/${REPOSITORY}.git \
+git clone git@${FORGE}:${USERNAME}/${REPOSITORY}.git \
    ~/git/vendor/${USERNAME}/${REPOSITORY}
 
 cd ~/git/vendor/${USERNAME}/${REPOSITORY}
@@ -73,29 +53,6 @@ self-destruct this README.md and the template.
 
 It will also build and run the initial tests. Importantly, this will
 also create the Cargo.lock file for the first time.
-
-## Configure the .env file
-
-```
-just config
-```
-
-This will copy the provided [.env-dist](template/.env-dist) to `.env`.
-You should edit the generated `.env` file by hand to configure your
-application.
-
-You can set an alternative `.env` file path by setting the `ENV_FILE`
-environment variable.
-
-## Run the program
-
-```
-just run [ARGS ...]
-```
-
-You can also run the binary directly by building manually (`just
-build`) and running the static binary
-`{{app_name}}/target/debug/{{app_name}}`.
 
 ## Commit the initial app source files
 
