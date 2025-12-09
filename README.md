@@ -1,17 +1,13 @@
 # rust-axum-template
 
-This is my [Axum](https://github.com/tokio-rs/axum) template for new
-Rust projects.
-
-This is a fork of my
-[rust-cli-template](https://github.com/EnigmaCurry/rust-cli-template)
-and this will receive upstream changes from it.
+This is my [Axum](https://github.com/tokio-rs/axum) server template for new
+Rust web projects.
 
 This is ALPHA software in-development.
 
 ## Features
 
-For full list of features, see the embedded
+For the full list of features, see the embedded
 [README.md](template/README.md) inside the template.
 
 ## How to use this template
