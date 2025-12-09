@@ -58,6 +58,41 @@ sudo install \
   /usr/local/bin/${APP}
 ```
 
+## Configuration
+
+The application uses a multi-source configuration system, coming from
+the following layers (from highest to lowest priority):
+
+ 1. Command line arguments. Every configuration setting has a long
+    form CLI argument (e.g., `--some-setting foo`). Explicit args like
+    this have the highest priority and override the setting from all
+    other layers.
+
+ 2. Environment variables. Every configuration setting has an
+    associated environment variable that you may set. This is the
+    preferred configuration style for Docker containers. The app
+    specific settings all have a unique prefix `${APP_PREFIX}_`.
+
+ 3. Configuration file. The application has an optional config file in
+    it's data root (`config.toml`). This is the lowest layer that is
+    configurable by the user.
+
+ 4. Application defaults. Every configuration setting has a builtin
+    default value. Implicit args like this have the lowest priority.
+
+### Application storage (stateful data)
+
+By default, the application stores files it creates in
+`${HOME}/.local/share/${APP}`. This includes the SQLite database
+files, ACME accounts, and TLS certificates.
+
+If you want to use a different path, or if you want to support
+multiple instances of the app, you need to override the directory path
+by any of the following methods:
+
+ * Use the command line arguments `-C PATH` or `--root-dir PATH`.
+ * Set the `ROOT_DIR` environment variable.
+
 ## Run
 
 Run `${APP} --help` to find all the options, but broadly speaking
@@ -111,7 +146,6 @@ export TLS_MODE=acme
 export TLS_ACME_CHALLENGE=tls-alpn-01
 export TLS_ACME_DIRECTORY_URL=https://acme-v02.api.letsencrypt.org/directory
 export TLS_ACME_EMAIL=
-export TLS_CACHE_DIR=./tls-cache
 export RUST_LOG=${APP_MODULE}=info
 
 ${APP} serve
@@ -132,7 +166,6 @@ export TLS_ACME_CHALLENGE=dns-01
 export TLS_ACME_DIRECTORY_URL=https://acme-v02.api.letsencrypt.org/directory
 export TLS_ACME_EMAIL=
 export ACME_DNS_API_BASE=https://auth.acme-dns.io
-export TLS_CACHE_DIR=./tls-cache
 export RUST_LOG=${APP_MODULE}=info
 
 ## Register ACME-DNS account 
@@ -153,8 +186,6 @@ export DATABASE_URL=sqlite:data.db
 export AUTH_METHOD=username_password
 export SESSION_SECURE=true
 export TLS_MODE=self-signed
-## If TLS_CACHE_DIR is not set, self-signed certs are ephemeral:
-export TLS_CACHE_DIR=./tls-cache
 export RUST_LOG=${APP_MODULE}=info
 
 ${APP} serve
