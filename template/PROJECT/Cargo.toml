@@ -1,6 +1,6 @@
 [package]
 name = "${APP}"
-description = "${APP} is a CLI tool"
+description = "${APP}"
 version = "0.1.0"
 edition = "2024"
 repository = "https://${GIT_FORGE}/${GIT_USERNAME}/${APP}"
