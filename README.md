@@ -14,7 +14,7 @@ For the full list of features, see the embedded
 
  * Install Rust with [rustup](https://rustup.rs/).
  * Install
-   [Just](https://github.com/casey/just?tab=readme-ov-file#installation)
+     [Just](https://github.com/casey/just?tab=readme-ov-file#packages)
    (you can run `cargo install just`)
  * Install [pnpm](https://pnpm.io/installation) (to build SvelteKit
    frontend SPA).
