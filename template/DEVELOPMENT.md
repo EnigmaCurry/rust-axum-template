@@ -20,7 +20,7 @@ rustup-init ## just press enter when prompted for default selection
 ## Clone source repository
 
 ```
-git clone git@github.com:${GIT_USERNAME}/${APP}.git \
+git clone git@${GIT_FORGE}:${GIT_USERNAME}/${APP}.git \
   ~/git/vendor/${GIT_USERNAME}/${APP}
 cd ~/git/vendor/${GIT_USERNAME}/${APP}
 ```

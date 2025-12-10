@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # Directory of the script
 ROOT_DIR="$(realpath $(dirname "${BASH_SOURCE[0]}"))"
@@ -8,39 +9,41 @@ cd ${ROOT_DIR}
 source template/_scripts/funcs.sh
 debug_var ROOT_DIR
 
-## App's name is the same as this script's directory,
-## unless APP is already set in the environment.
-if [ -z "${APP:-}" ]; then
-  script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-  # Raw name = basename of that directory
-  raw_app="$(basename "$script_dir")"
-  # Sanitize: allow only alphanumerics and dashes; everything else → dash
-  APP="$(printf '%s' "$raw_app" | sed -E 's/[^[:alnum:]-]+/-/g')"
-fi
+check_deps cargo just pnpm
+
+echo
+ask_no_blank "Enter your git forge domain" GIT_FORGE "github.com"
+
+APP="$(basename "$ROOT_DIR")"
+APP="$(printf '%s' "$APP" | sed -E 's/[^[:alnum:]-]+/-/g')"
+echo
+ask_no_blank "Enter your application name (no spaces)" APP "${APP}"
+
+GIT_USERNAME="$(
+        git remote get-url origin 2>/dev/null |
+          sed -E 's/^(https:\/\/|git@github\.com:)([^\/]+).*$/\2/')"
+GIT_USERNAME="${GIT_USERNAME,,}"
+echo
+ask_no_blank "Enter your Git forge username or org name" GIT_USERNAME "${GIT_USERNAME}"
+
 export APP
-
-## Git username, derived from origin remote unless GIT_USERNAME is already set.
-if [ -z "${GIT_USERNAME:-}" ]; then
-  GIT_USERNAME="$(
-    git remote get-url origin 2>/dev/null |
-      sed -E 's/^(https:\/\/|git@github\.com:)([^\/]+).*$/\2/'
-  )"
-  # Fallback if git/remote parsing fails
-  GIT_USERNAME="${GIT_USERNAME:-username}"
-  # Lowercase
-  GIT_USERNAME="${GIT_USERNAME,,}"
-fi
-export GIT_USERNAME
-
+export GIT_USERNAME="${GIT_USERNAME,,}"
 export YEAR="$(date +%Y)"
 export APP_PREFIX="${APP^^}"
 export APP_PREFIX="${APP_PREFIX//[ -]/_}"
 export APP_MODULE="${APP_PREFIX,,}"
+export GIT_REPOSITORY="https://${GIT_FORGE}/${GIT_USERNAME}/${APP}"
 
+echo
 check_var APP GIT_USERNAME YEAR
 debug_var APP
 debug_var GIT_USERNAME
 debug_var YEAR
+debug_var GIT_REPOSITORY
+
+echo
+echo "Cargo will now download extra dependencies, build, and test your app."
+confirm yes "Do you want to proceed with the values shown above" "?"
 
 # Rename PROJECT directory to the same name as the app
 mv "${TEMPLATE_DIR}/PROJECT" "${TEMPLATE_DIR}/${APP}"
@@ -55,14 +58,17 @@ while IFS= read -r -d '' file; do
     mkdir -p "$(dirname "$DEST_PATH")"
 
     # Replace variables using envsubst and copy the file
-    envsubst '${APP} ${APP_PREFIX} ${APP_MODULE} ${GIT_USERNAME} ${YEAR}' < "$file" > "$DEST_PATH"
+    envsubst '${APP} ${APP_PREFIX} ${APP_MODULE} ${GIT_FORGE} ${GIT_USERNAME} ${GIT_REPOSITORY} ${YEAR}' < "$file" > "$DEST_PATH"
     echo "Processed: $file -> $DEST_PATH"
 done < <(find "$TEMPLATE_DIR" -type f -print0)
 
 echo "Template render complete!"
 rm -rf template setup.sh
 
-just config test
+just deps config build
+just test
 
 git add .
 git add -f .env-dist
+
+echo "Please review the license terms in LICENSE.txt"

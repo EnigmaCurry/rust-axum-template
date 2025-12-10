@@ -10,6 +10,15 @@ This is ALPHA software in-development.
 For the full list of features, see the embedded
 [README.md](template/README.md) inside the template.
 
+## Requirements
+
+ * Install Rust with [rustup](https://rustup.rs/).
+ * Install
+   [Just](https://github.com/casey/just?tab=readme-ov-file#installation)
+   (you can run `cargo install just`)
+ * Install [pnpm](https://pnpm.io/installation) (to build SvelteKit
+   frontend SPA).
+
 ## How to use this template
 
  * [Create a new repository using this template](https://github.com/new?template_name=rust-axum-template&template_owner=EnigmaCurry).
@@ -38,23 +47,32 @@ cd ~/git/vendor/${USERNAME}/${REPOSITORY}
 ## Render the template
 
 After cloning the repository to your workstation, you must initialize
- it:
+ it. Set the `GIT_USERNAME` environment variable as your GitHub
+ username/organization and then run `setup.sh`:
 
 ```
 ./setup.sh
 ```
 
+Follow the interactive prompts to enter the following information:
+
+ * `GIT_FORGE` - enter your Git host's domain name (e.g.,
+   `github.com`).
+ * `APP` - enter your new application's name. Use alphanumeric
+   characters with dashes. No spaces.
+ * `GIT_USERNAME` - enter the Git forge username or the organization
+   name that should host this repository.
+
 This will render the template files into the project root and then
 self-destruct this README.md and the template.
 
-It will also build and run the initial tests. Importantly, this will
-also create the Cargo.lock file for the first time.
+Cargo will build and run the initial tests.
 
 ## Commit the initial app source files
 
 Once you've verified that the tests ran correctly, you can add all of
-the files the template generated, as well as the `Cargo.lock` file,
-into the git repository. Commit and push your changes:
+the files that the template generated, as well as the `Cargo.lock`
+file, into the git repository. Commit and push your changes:
 
 ```
 ## For example:

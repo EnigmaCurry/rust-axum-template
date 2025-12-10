@@ -1,6 +1,6 @@
 # ---- Runtime only --------------------------------------------
 FROM debian:trixie-slim AS runtime
-LABEL org.opencontainers.image.source="https://github.com/${GIT_USERNAME}/${APP}"
+LABEL org.opencontainers.image.source="https://${GIT_FORGE}/${GIT_USERNAME}/${APP}"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates coreutils sqlite3 && \

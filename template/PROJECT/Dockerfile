@@ -101,7 +101,7 @@ RUN sqlx database create && sqlx migrate run && \
 
 # ---- Runtime -------------------------------------------------
 FROM debian:trixie-slim AS runtime
-LABEL org.opencontainers.image.source="https://github.com/enigmacurry/${APP}"
+LABEL org.opencontainers.image.source="https://${GIT_FORGE}/${GIT_USERNAME}/${APP}"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates coreutils sqlite3 && \

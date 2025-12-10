@@ -42,20 +42,20 @@
    * Publishing crates to crates.io (disabled by default, uncomment in
    [release.yml](template/.github/workflows/release.yml)).
 
-## Build
+## Install from source code
 
  * Install Rust with [rustup](https://rustup.rs/).
  * Install
    [Just](https://github.com/casey/just?tab=readme-ov-file#installation)
    (`cargo install just`)
+ * Clone this git repository to your workstation.
 
 ```
 just build --release
 ```
 
-Find your built executable in `target/release/${APP}`.
-
-## Install
+Find the built executable in `./target/release/${APP}`. You can
+`install` it globally on your system:
 
 ```
 sudo install \
@@ -63,6 +63,31 @@ sudo install \
   /usr/local/bin/${APP}
 ```
 
+## Install from binary release
+
+This project is automatically built and released by GitHub actions.
+Each git tag of the format `vX.X.X` will trigger the
+[release.yml](.github/workflows/release.yml) action. 
+
+To make your first release, just make a git tag `v0.1.0` and push it.
+It is required that the tag exactly matches the package version in
+Cargo.toml.
+
+For future releases, you should use the `just bump-version` and `just
+release` targets (See [DEVELOPMENT.md](DEVELOPMENT)). These commands
+will automate the steps needed to cleanly upgrade the Cargo versions
+and to create a release branch + pull request.
+
+Binaries for Linux X86_64 and AArch64 are built and included in each
+release:
+
+ * [Download the latest release](https://github.com/${GIT_USERNAME}/${APP}/releases/latest)
+
+Docker images built for X86_64 and AArch64 are published on the GitHub
+container registry (`ghcr.io`):
+
+ * [Pull the latest Docker image](https://github.com/${GIT_USERNAME}/${APP}/pkgs/container/${APP})
+ 
 ## Configuration
 
 The application uses a multi-source configuration system, consisting
@@ -101,8 +126,8 @@ of the following methods:
 
 ## Run
 
-Run `${APP} --help` to find all the options, but broadly speaking
-there are a few ways you can run it:
+Run `${APP} --help` to find all of the available options. Here are a
+few examples of how you can run it:
 
 ### Plain HTTP
 
@@ -117,6 +142,21 @@ ${APP} serve -v \
   --auth-method        username_password \
   --session-secure     false
 ```
+
+### Automatic self-signed TLS
+
+```
+${APP} serve -v \
+  --net-host               ${APP}.example.org \
+  --net-listen-ip          0.0.0.0 \
+  --net-listen-port        8443 \
+  --auth-method            username_password \
+  --session-secure         true \
+  --tls-mode               self-signed
+```
+
+Note: self-signed certificates are not trusted in normal web browsers.
+Use Manual TLS or ACME for production.
 
 ### Manual TLS
 
@@ -171,18 +211,6 @@ ${APP} serve -v \
   --tls-acme-directory-url https://acme-v02.api.letsencrypt.org/directory \
   --tls-acme-email         "" \
   --acme-dns-api-base      https://auth.acme-dns.io
-```
-
-### Self-Signed TLS
-
-```
-${APP} serve -v \
-  --net-host               ${APP}.example.org \
-  --net-listen-ip          0.0.0.0 \
-  --net-listen-port        8443 \
-  --auth-method            username_password \
-  --session-secure         true \
-  --tls-mode               self-signed
 ```
 
 ## Development
