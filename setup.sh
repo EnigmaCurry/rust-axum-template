@@ -9,7 +9,7 @@ cd ${ROOT_DIR}
 source template/_scripts/funcs.sh
 debug_var ROOT_DIR
 
-check_deps cargo just pnpm
+check_deps cargo just pnpm envsubst sed
 
 echo
 ask_no_blank "Enter your git forge domain" GIT_FORGE "github.com"

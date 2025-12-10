@@ -69,9 +69,9 @@ This project is automatically built and released by GitHub actions.
 Each git tag of the format `vX.X.X` will trigger the
 [release.yml](.github/workflows/release.yml) action. 
 
-To make your first release, just make a git tag `v0.1.0` and push it.
+To make your first release, create the git tag `v0.1.0` and push it.
 It is required that the tag exactly matches the package version in
-Cargo.toml.
+[${APP}/Cargo.toml](${APP}/Cargo.toml).
 
 For future releases, you should use the `just bump-version` and `just
 release` targets (See [DEVELOPMENT.md](DEVELOPMENT)). These commands
@@ -95,23 +95,24 @@ of the following layers (from highest to lowest priority):
 
  1. **Command line arguments**. Every configuration setting has a long
     form CLI argument (e.g., `--some-setting foo`). Explicit args like
-    this have the highest priority and override the setting from all
-    other layers.
+    this have the highest priority and will override the same setting
+    from all other layers.
 
  2. **Environment variables**. Every configuration setting has an
-    associated environment variable. This is the preferred
-    configuration style for Docker containers.
+    associated environment variable with categorization prefix (e.g,
+    `CATEGORY_SOME_SETTING`). This is the preferred configuration
+    style for Docker containers.
 
  3. **User Defaults**. The application has an optional config file in
     it's data root (`defaults.toml`). This file dynamically overrides
     the application's *default* settings and help messages.
 
  4. **Application defaults**. Every configuration setting has a
-    default value compiled into the binary.
+    default value compiled into the binary, used as a last resort.
 
 ### Application storage (stateful data)
 
-The application needs to store its SQLite database files, ACME
+The application needs a place to store its SQLite database files, ACME
 accounts, and TLS certificates. By default, the application creates
 files in `${XDG_DATA_HOME}/${APP}`, or `${HOME}/.local/share/${APP}`
 (if no `XDG_DATA_HOME` is set) or `./${APP}-data` (if no `HOME`

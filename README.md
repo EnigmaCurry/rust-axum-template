@@ -14,10 +14,11 @@ For the full list of features, see the embedded
 
  * Install Rust with [rustup](https://rustup.rs/).
  * Install
-     [Just](https://github.com/casey/just?tab=readme-ov-file#packages)
-   (you can run `cargo install just`)
+     [Just](https://github.com/casey/just?tab=readme-ov-file#packages).
+     (You can run `cargo install just`.)
  * Install [pnpm](https://pnpm.io/installation) (to build SvelteKit
    frontend SPA).
+ * Install `envsubst`. (e.g., `sudo apt install gettext`)
 
 ## How to use this template
 
