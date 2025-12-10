@@ -10,16 +10,6 @@ This is ALPHA software in-development.
 For the full list of features, see the embedded
 [README.md](template/README.md) inside the template.
 
-## Requirements
-
- * Install Rust with [rustup](https://rustup.rs/).
- * Install
-     [Just](https://github.com/casey/just?tab=readme-ov-file#packages).
-     (You can run `cargo install just`.)
- * Install [pnpm](https://pnpm.io/installation) (to build SvelteKit
-   frontend SPA).
- * Install `envsubst`. (e.g., `sudo apt install gettext`)
-
 ## How to use this template
 
  * [Create a new repository using this template](https://github.com/new?template_name=rust-axum-template&template_owner=EnigmaCurry).
@@ -31,9 +21,18 @@ For the full list of features, see the embedded
    * Find `Source` and set it to `GitHub Actions`. (**Not** `Deploy
      from a branch`)
 
- * Clone your new repository to your workstation.
+## On your workstation ...
 
-## Render the template
+ * Clone your new repository.
+ * Install Rust with [rustup](https://rustup.rs/).
+ * Install
+     [Just](https://github.com/casey/just?tab=readme-ov-file#packages).
+     (You can run `cargo install just`.)
+ * Install [pnpm](https://pnpm.io/installation) (to build SvelteKit
+   frontend SPA).
+ * Install `envsubst`. (e.g., `sudo apt install gettext`)
+
+### Render the template
 
 After cloning the repository to your workstation, you must initialize
  it. Run `setup.sh`:
@@ -56,7 +55,7 @@ self-destruct this README.md and the template.
 
 Cargo will build and run the initial tests.
 
-## Commit the initial app source files
+### Commit the initial app source files
 
 Once you've verified that the tests ran correctly, you can add all of
 the files that the template generated, as well as the `Cargo.lock`
