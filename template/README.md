@@ -10,7 +10,7 @@
  * Embedded SQLite database.
  * RESTFul JSON API built with
    [axum](https://github.com/tokio-rs/axum).
- * Builtin TLS with the following modes:
+ * Built-in TLS with the following modes:
    * ACME supporting TLS-ALPN-01 and DNS-01 challenge types. (e.g.,
      when you need a production certificate from Let's Encrypt.)
    * Automatic TLS with self-signed certificate (e.g., when using
