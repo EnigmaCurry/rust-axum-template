@@ -8,13 +8,30 @@ cd ${ROOT_DIR}
 source template/_scripts/funcs.sh
 debug_var ROOT_DIR
 
-# Set variables to be replaced in the template files
-export APP="$(
-  git remote get-url origin |
-    sed -E 's#.*/([^/]+)\.git$#\1#; t; s#.*/([^/]+)$#\1#; t; s#.*#app#'
-)"
-export GIT_USERNAME="$(git remote get-url origin | sed -E 's/^(https:\/\/|git@github\.com:)([^\/]+).*$/\2/; t; s/.*/username/')"
-export GIT_USERNAME="${GIT_USERNAME,,}"
+## App's name is the same as this script's directory,
+## unless APP is already set in the environment.
+if [ -z "${APP:-}" ]; then
+  script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+  # Raw name = basename of that directory
+  raw_app="$(basename "$script_dir")"
+  # Sanitize: allow only alphanumerics and dashes; everything else → dash
+  APP="$(printf '%s' "$raw_app" | sed -E 's/[^[:alnum:]-]+/-/g')"
+fi
+export APP
+
+## Git username, derived from origin remote unless GIT_USERNAME is already set.
+if [ -z "${GIT_USERNAME:-}" ]; then
+  GIT_USERNAME="$(
+    git remote get-url origin 2>/dev/null |
+      sed -E 's/^(https:\/\/|git@github\.com:)([^\/]+).*$/\2/'
+  )"
+  # Fallback if git/remote parsing fails
+  GIT_USERNAME="${GIT_USERNAME:-username}"
+  # Lowercase
+  GIT_USERNAME="${GIT_USERNAME,,}"
+fi
+export GIT_USERNAME
+
 export YEAR="$(date +%Y)"
 export APP_PREFIX="${APP^^}"
 export APP_PREFIX="${APP_PREFIX//[ -]/_}"
