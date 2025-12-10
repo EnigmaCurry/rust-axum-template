@@ -13,10 +13,9 @@ env:
   PROJECT_DIR: ${APP}
 
 jobs:
-  build:
-    name: Build - ${{ matrix.platform.release_for }}
-    runs-on: ${{ matrix.platform.os }}
-
+  frontend:
+    name: Build frontend
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,6 +33,35 @@ jobs:
           cache: pnpm
           cache-dependency-path: |
             frontend/pnpm-lock.yaml
+
+      - name: Install just
+        uses: taiki-e/cache-cargo-install-action@v2
+        with:
+          tool: just
+
+      - name: Build frontend
+        run: just config build-frontend
+
+      - name: Upload frontend build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/build
+
+  build:
+    name: Build - ${{ matrix.platform.release_for }}
+    needs: frontend
+    runs-on: ${{ matrix.platform.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download frontend build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: ${{ github.workspace }}/frontend/build
 
       - name: Update Rust stable
         run: rustup toolchain install stable
@@ -103,12 +131,13 @@ jobs:
           command: ${{ matrix.platform.command }}
           target: ${{ matrix.platform.target }}
           args: "--bin ${{ matrix.platform.bin }} --locked --release"
-          strip: true
           working-directory: ${{ env.PROJECT_DIR }}
 
-      - name: move binary path
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: mv target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }} .
+      - name: move binary into crate dir
+        working-directory: ${{ github.workspace }}
+        run: |
+          mv target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }} \
+             ${{ env.PROJECT_DIR }}/
 
       - name: Package as archive
         shell: bash
@@ -139,21 +168,21 @@ jobs:
             bin: ${APP}
             name: Linux-aarch64
             command: build
-          - release_for: macOS-x86_64
-            os: macOS-latest
-            target: x86_64-apple-darwin
-            bin: ${APP}
-            name: Darwin-x86_64
-            command: build
-          - release_for: macOS-arm64
-            os: macOS-latest
-            target: aarch64-apple-darwin
-            bin: ${APP}
-            name: Darwin-arm64
-            command: build
+          # - release_for: macOS-x86_64
+          #   os: macOS-latest
+          #   target: x86_64-apple-darwin
+          #   bin: ${APP}
+          #   name: Darwin-x86_64
+          #   command: build
+          # - release_for: macOS-arm64
+          #   os: macOS-latest
+          #   target: aarch64-apple-darwin
+          #   bin: ${APP}
+          #   name: Darwin-arm64
+          #   command: build
 
   release:
-    name: Release - ${{ matrix.platform.release_for }}
+    name: Release
     needs: build
     runs-on: ubuntu-latest
 
