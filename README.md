@@ -35,8 +35,7 @@ For the full list of features, see the embedded
 ## Render the template
 
 After cloning the repository to your workstation, you must initialize
- it. Set the `GIT_USERNAME` environment variable as your GitHub
- username/organization and then run `setup.sh`:
+ it. Run `setup.sh`:
 
 ```
 ./setup.sh
