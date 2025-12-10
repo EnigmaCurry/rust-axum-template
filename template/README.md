@@ -74,7 +74,7 @@ It is required that the tag exactly matches the package version in
 [${APP}/Cargo.toml](${APP}/Cargo.toml).
 
 For future releases, you should use the `just bump-version` and `just
-release` targets (See [DEVELOPMENT.md](DEVELOPMENT)). These commands
+release` targets (See [DEVELOPMENT.md](DEVELOPMENT.md)). These commands
 will automate the steps needed to cleanly upgrade the Cargo versions
 and to create a release branch + pull request.
 
