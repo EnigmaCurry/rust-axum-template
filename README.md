@@ -41,7 +41,7 @@ After cloning the repository to your workstation, you must initialize
 ./setup.sh
 ```
 
-Follow the interactive prompts to enter the following information:
+Read the interactive prompts and enter the following information:
 
  * `GIT_FORGE` - enter your Git host's domain name (e.g.,
    `github.com`).
