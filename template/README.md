@@ -1,7 +1,7 @@
 # ${APP}
 
-[![Crates.io](https://img.shields.io/crates/v/${APP}?color=blue
-)](https://crates.io/crates/${APP})
+<!-- [![Crates.io](https://img.shields.io/crates/v/${APP}?color=blue -->
+<!-- )](https://crates.io/crates/${APP}) -->
 [![Coverage](https://img.shields.io/badge/Coverage-Report-purple)](https://${GIT_USERNAME}.github.io/${APP}/coverage/master/)
 
 ## Features
