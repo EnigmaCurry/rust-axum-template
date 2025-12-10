@@ -1,18 +1,22 @@
 use axum::http::HeaderName;
 use clap::{CommandFactory, Parser, error::ErrorKind};
 use clap_complete::shells::Shell;
-use cli::{AcmeDnsRegisterArgs, TlsAcmeChallenge, TlsMode};
+use clap_serde_derive::ClapSerde;
+use config::{AcmeDnsRegisterConfig, AppConfigOpt, TlsAcmeChallenge, TlsMode};
+use config::{AppConfig, build_log_level};
 use errors::CliError;
 use middleware::auth::AuthenticationMethod;
 use std::env;
-use std::io::Write;
+use std::fs::{self, File};
+use std::io::Read;
+use std::io::{BufReader, Write};
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use tls::dns::{format_acme_dns_cname_help, register_acme_dns_account};
 use tracing_subscriber::EnvFilter;
 
 mod api_docs;
-mod cli;
+mod config;
 mod errors;
 mod frontend;
 mod middleware;
@@ -23,29 +27,33 @@ mod routes;
 mod server;
 mod tls;
 
-use crate::cli::{Cli, Commands, ServeArgs};
+use crate::config::{Cli, Commands, ServeConfig};
 use prelude::*;
 
 fn main() {
-    println!("ok");
-    init_tracing();
     if let Err(e) = run_cli(
         std::env::args_os(),
         &mut std::io::stdout(),
         &mut std::io::stderr(),
     ) {
         error!("run_cli failed: {:?}", e);
-        // Print only the user-facing message
         eprintln!("{e}");
         std::process::exit(1);
     }
 }
 
-fn init_tracing() {
+fn init_tracing(log_level: &str) {
+    use tracing_subscriber::EnvFilter;
+
+    let filter = EnvFilter::try_new(log_level)
+        .or_else(|_| EnvFilter::try_from_default_env())
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
+        .with_env_filter(filter)
         .pretty()
-        .init();
+        .try_init()
+        .ok();
 }
 
 /// run_cli is the common entrypoint for both main and unit tests.
@@ -62,15 +70,26 @@ where
         Err(e) => {
             debug!("CLI parsing error: kind={:?}, error={}", e.kind(), e);
             match e.kind() {
+                // NEW: no subcommand -> print top-level help to stdout and succeed
+                ErrorKind::MissingSubcommand => {
+                    // Use the same Command builder your test uses
+                    let mut cmd = crate::config::app();
+                    let _ = cmd.write_help(out);
+                    // Optional: no need for extra newline because the test trims
+                    return Ok(());
+                }
+
+                // Cases where clap already formats the help/version text nicely
                 ErrorKind::DisplayHelp
                 | ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
                 | ErrorKind::InvalidSubcommand
                 | ErrorKind::UnknownArgument
                 | ErrorKind::DisplayVersion => {
-                    // Let clap format the help/version text.
                     let _ = write!(out, "{e}");
                     return Ok(());
                 }
+
+                // Everything else is a real “invalid args” error
                 _ => {
                     return Err(CliError::InvalidArgs(e.to_string()));
                 }
@@ -79,36 +98,73 @@ where
     };
     cli.validate()?;
 
-    // Global log level handling (same logic as before, but using Cli fields)
-    let log_level = (if cli.verbose {
-        Some("debug".to_string())
-    } else {
-        cli.log.clone()
-    })
-    .or_else(|| env::var("RUST_LOG").ok())
-    .unwrap_or_else(|| "info".to_string());
+    let log_level = build_log_level(&cli);
+    init_tracing(&log_level);
 
-    let level = log::LevelFilter::from_str(&log_level).unwrap_or(log::LevelFilter::Info);
-
-    match env_logger::Builder::new()
-        .filter_level(level)
-        .format_timestamp_secs()
-        .try_init()
-    {
-        Ok(_) => {
-            debug!("env_logger initialized with level {level:?}");
-        }
-        Err(err) => {
-            // This will go through tracing_subscriber, which we already set up in init_tracing()
-            warn!("env_logger initialization failed (a logger may already be set): {err}");
-        }
-    }
-
-    // Dispatch subcommands using strongly-typed enums instead of ArgMatches.
     match cli.command {
         Commands::Completions { shell } => completions(shell, out, err),
-        Commands::Serve(args) => serve(args, out, err),
-        Commands::AcmeDnsRegister(args) => acme_dns_register(args, out, err),
+
+        Commands::Serve(mut serve_args) => {
+            let root_dir = ensure_root_dir(cli.root_dir.clone())?;
+
+            // Decide which config path to use:
+            // - If user provided -f/--config or CONFIG_FILE -> use that (explicit = true)
+            // - Otherwise -> <root_dir>/defaults.toml (explicit = false)
+            let (config_path, explicit) = if let Some(ref p) = cli.config_file {
+                (p.clone(), true)
+            } else {
+                (root_dir.join("defaults.toml"), false)
+            };
+
+            // 1. Read config file into AppConfig::Opt
+            let file_opt: AppConfigOpt = if config_path.exists() {
+                info!("Loading config file: {}", config_path.display());
+
+                let mut s = String::new();
+                File::open(&config_path)
+                    .and_then(|f| BufReader::new(f).read_to_string(&mut s))
+                    .map_err(|e| {
+                        CliError::RuntimeError(format!(
+                            "Error reading configuration file {}: {e}",
+                            config_path.display()
+                        ))
+                    })?;
+
+                toml::from_str(&s).map_err(|e| {
+                    CliError::RuntimeError(format!(
+                        "Error in configuration file {}: {e}",
+                        config_path.display()
+                    ))
+                })?
+            } else {
+                if explicit {
+                    // User explicitly asked for a config file that doesn't exist -> error.
+                    return Err(CliError::RuntimeError(format!(
+                        "Configuration file not found: {}",
+                        config_path.display()
+                    )));
+                } else {
+                    // Implicit default (<root_dir>/defaults.toml) missing -> just use defaults.
+                    info!(
+                        "Factory default values loaded (config file does not exist: {})",
+                        config_path.display()
+                    );
+                    Default::default()
+                }
+            };
+
+            // 2. Merge: CLI/env > defaults.toml > defaults
+            let app_cfg: AppConfig = AppConfig::from(file_opt).merge(&mut serve_args.config_cli);
+
+            // 3. Validate the merged config (eg TLS constraints)
+            app_cfg.tls.validate_with_root(&root_dir)?;
+            app_cfg.auth.validate()?;
+
+            // 4. Run the server with *AppConfig*
+            serve(app_cfg, root_dir, out, err)
+        }
+
+        Commands::AcmeDnsRegister(args) => acme_dns_register(args, cli.root_dir.clone(), out, err),
     }
 }
 
@@ -158,13 +214,15 @@ fn generate_completion_script<W: Write>(shell: Shell, out: &mut W) {
 }
 
 fn serve<W1: Write, W2: Write>(
-    args: ServeArgs,
+    cfg: AppConfig,
+    root_dir: std::path::PathBuf,
     _out: &mut W1,
     _err: &mut W2,
 ) -> Result<(), CliError> {
+    let root_dir = ensure_root_dir(root_dir)?;
     // --- Network ---
-    let ip = &args.network.listen_ip;
-    let port = args.network.listen_port;
+    let ip = &cfg.network.listen_ip;
+    let port = cfg.network.listen_port;
     let addr_str = format!("{ip}:{port}");
 
     let addr: SocketAddr = match addr_str.parse() {
@@ -178,16 +236,16 @@ fn serve<W1: Write, W2: Write>(
 
     // --- TLS mode selection ---
     // --- TLS mode selection ---
-    let tls_config = match args.tls.mode {
+    let tls_config = match cfg.tls.mode {
         TlsMode::None => {
             info!("TLS mode: none (plain HTTP).");
             server::TlsConfig::Http
         }
         TlsMode::Manual => {
-            let cert_path = args.tls.cert_path.clone().ok_or_else(|| {
+            let cert_path = cfg.tls.cert_path.clone().ok_or_else(|| {
                 CliError::InvalidArgs("Missing --tls-cert-path for --tls-mode=manual".to_string())
             })?;
-            let key_path = args.tls.key_path.clone().ok_or_else(|| {
+            let key_path = cfg.tls.key_path.clone().ok_or_else(|| {
                 CliError::InvalidArgs("Missing --tls-key-path for --tls-mode=manual".to_string())
             })?;
 
@@ -203,10 +261,9 @@ fn serve<W1: Write, W2: Write>(
             }
         }
         TlsMode::SelfSigned => {
-            let cache_dir = args.tls.cache_dir.as_ref().map(|s| PathBuf::from(s));
-
-            let sans = args.tls.sans.clone();
-            let valid_days = args.tls.self_signed_valid_days;
+            let cache_dir = Some(root_dir.join("tls-cache"));
+            let sans = cfg.tls.sans.clone();
+            let valid_days = cfg.tls.self_signed_valid_days;
 
             info!(
                 "TLS mode: self-signed (HTTPS) – cache_dir={:?}, sans={:?}, valid_days={}",
@@ -220,17 +277,18 @@ fn serve<W1: Write, W2: Write>(
             }
         }
         TlsMode::Acme => {
-            // Shared bits: cache dir, domains, directory URL, email
-            let cache_dir_str = args.tls.cache_dir.clone().ok_or_else(|| {
-                CliError::InvalidArgs(
-                    "TLS cache directory is required when --tls-mode=acme. \
-                     Provide --tls-cache-dir or set TLS_CACHE_DIR."
-                        .to_string(),
-                )
-            })?;
-            let cache_dir = PathBuf::from(cache_dir_str);
+            // Shared bits: cache dir, domains, directory URL, email.
+            let cache_dir: PathBuf = root_dir.join("tls-cache");
 
-            let mut domains: Vec<String> = args
+            // You may want to ensure the directory exists:
+            if let Err(e) = std::fs::create_dir_all(&cache_dir) {
+                return Err(CliError::RuntimeError(format!(
+                    "Failed to create TLS cache dir {}: {e}",
+                    cache_dir.display()
+                )));
+            }
+
+            let mut domains: Vec<String> = cfg
                 .tls
                 .sans
                 .iter()
@@ -238,7 +296,9 @@ fn serve<W1: Write, W2: Write>(
                 .filter(|s| !s.trim().is_empty())
                 .collect();
 
-            if let Some(ref host) = args.network.net_host {
+            // (rest of your ACME code unchanged, now using `cache_dir`)
+
+            if let Some(ref host) = cfg.network.net_host {
                 if !host.trim().is_empty() {
                     domains.push(host.clone());
                 }
@@ -256,10 +316,10 @@ fn serve<W1: Write, W2: Write>(
                 ));
             }
 
-            let directory_url = args.tls.acme_directory_url.clone();
-            let contact_email = args.tls.acme_email.clone();
+            let directory_url = cfg.tls.acme_directory_url.clone();
+            let contact_email = cfg.tls.acme_email.clone();
 
-            match args.tls.acme_challenge {
+            match cfg.tls.acme_challenge {
                 TlsAcmeChallenge::TlsAlpn01 => {
                     info!(
                         "TLS mode: acme (TLS-ALPN-01) – directory_url={}, cache_dir={}, domains={:?}, contact_email={:?}",
@@ -284,7 +344,7 @@ fn serve<W1: Write, W2: Write>(
                         cache_dir.display(),
                         domains,
                         contact_email,
-                        args.tls.acme_dns_api_base.clone(),
+                        cfg.tls.acme_dns_api_base.clone(),
                     );
 
                     server::TlsConfig::AcmeDns01 {
@@ -292,7 +352,7 @@ fn serve<W1: Write, W2: Write>(
                         cache_dir,
                         domains,
                         contact_email,
-                        acme_dns_api_base: args.tls.acme_dns_api_base.clone(),
+                        acme_dns_api_base: cfg.tls.acme_dns_api_base.clone(),
                     }
                 }
 
@@ -308,16 +368,25 @@ fn serve<W1: Write, W2: Write>(
     };
 
     // --- Database + session config ---
-    let db_url = args.clone().database.database_url;
+    let db_url = match cfg.clone().database.database_url {
+        // Rewrite the default database path:
+        None => {
+            let db_path = root_dir.join("data.db");
+            format!("sqlite://{}", db_path.display())
+        }
+        // If the user explicitly set DATABASE_URL,
+        // we assume they know what they’re doing.
+        Some(url) => url,
+    };
 
-    let session_secure = args.session.session_secure;
-    let session_expiry_secs = args.session.session_expiry_seconds;
-    let session_check_secs = args.session.session_check_seconds;
+    let session_secure = cfg.session.session_secure;
+    let session_expiry_secs = cfg.session.session_expiry_seconds;
+    let session_check_secs = cfg.session.session_check_seconds;
 
     // --- Authentication method + trusted USER header options ---
-    let auth_method: AuthenticationMethod = args.auth.authentication_method;
+    let auth_method: AuthenticationMethod = cfg.auth.authentication_method;
 
-    let header_name_str = args.auth.trusted_header_name.as_str();
+    let header_name_str = cfg.auth.trusted_header_name.as_str();
 
     let header_name = match HeaderName::from_bytes(header_name_str.as_bytes()) {
         Ok(h) => h,
@@ -328,9 +397,9 @@ fn serve<W1: Write, W2: Write>(
         }
     };
 
-    let trusted_proxy: IpAddr = args.auth.trusted_proxy;
+    let trusted_proxy: Option<IpAddr> = cfg.auth.trusted_proxy;
 
-    let auth_cfg = middleware::trusted_header_auth::AuthConfig {
+    let auth_cfg = middleware::trusted_header_auth::ForwardAuthConfig {
         method: auth_method,
         trusted_header_name: header_name,
         trusted_proxy,
@@ -338,9 +407,13 @@ fn serve<W1: Write, W2: Write>(
 
     match auth_method {
         AuthenticationMethod::ForwardAuth => {
+            let proxy = cfg
+                .auth
+                .trusted_proxy
+                .expect("auth.validate() should guarantee trusted_proxy is Some for ForwardAuth");
             info!(
                 "Authentication: forward_auth (trusted header='{}', proxy={})",
-                header_name_str, trusted_proxy
+                header_name_str, proxy
             );
         }
         AuthenticationMethod::UsernamePassword => {
@@ -349,8 +422,8 @@ fn serve<W1: Write, W2: Write>(
     }
 
     // --- Trusted FORWARDED-FOR (client IP) options ---
-    let fwd_enabled = args.auth.trusted_forwarded_for;
-    let fwd_header_str = args.auth.trusted_forwarded_for_name.as_str();
+    let fwd_enabled = cfg.auth.trusted_forwarded_for;
+    let fwd_header_str = cfg.auth.trusted_forwarded_for_name.as_str();
 
     let fwd_header_name = match HeaderName::from_bytes(fwd_header_str.as_bytes()) {
         Ok(h) => h,
@@ -368,14 +441,14 @@ fn serve<W1: Write, W2: Write>(
     };
 
     if fwd_enabled {
-        info!(
-            "Trusted FORWARDED-FOR enabled: header='{fwd_header_str}', trusted_proxy={trusted_proxy}"
-        );
+        if let Some(t) = trusted_proxy {
+            info!("Trusted FORWARDED-FOR enabled: header='{fwd_header_str}', trusted_proxy={t}");
+        }
     }
 
-    debug!("serve(): parsed args = {:?}", args.clone());
-    info!("Server will listen on {addr} (from {addr_str})");
-    info!("Database URL: {db_url}");
+    debug!("serve(): parsed cfg = {:?}", cfg.clone());
+    info!("Server will listen on {addr}");
+    info!("Database URL: {db_url:?}");
     debug!(
         "Session config: secure={}, expiry_secs={}, check_secs={}",
         session_secure, session_expiry_secs, session_check_secs
@@ -416,12 +489,21 @@ fn serve<W1: Write, W2: Write>(
 }
 
 fn acme_dns_register<W1: Write, W2: Write>(
-    args: AcmeDnsRegisterArgs,
+    args: AcmeDnsRegisterConfig,
+    root_dir: std::path::PathBuf,
     out: &mut W1,
     _err: &mut W2,
 ) -> Result<(), CliError> {
-    // Where to store creds
-    let cache_dir = PathBuf::from(args.cache_dir.unwrap_or_else(|| "./tls-cache".to_string()));
+    let root_dir = ensure_root_dir(root_dir)?;
+    // Where to store creds:
+    let cache_dir = root_dir.join("tls-cache");
+
+    if let Err(e) = std::fs::create_dir_all(&cache_dir) {
+        return Err(CliError::RuntimeError(format!(
+            "Failed to create TLS cache dir {}: {e}",
+            cache_dir.display()
+        )));
+    }
 
     // Build domain list from NET_HOST + TLS_SANS for CNAME hints
     let mut domains: Vec<String> = Vec::new();
@@ -503,7 +585,7 @@ fn help_prints_when_no_subcommand() {
     let actual = String::from_utf8(out).expect("stdout should be valid utf8");
 
     // Build expected help text directly from the Command
-    let mut cmd = crate::cli::app();
+    let mut cmd = crate::config::app();
     let mut expected_buf = Vec::new();
     cmd.write_help(&mut expected_buf).unwrap();
     let expected_help = String::from_utf8(expected_buf).unwrap();
@@ -520,4 +602,14 @@ fn help_prints_when_no_subcommand() {
         actual_norm, expected_norm,
         "normalized help output from run_cli did not match Command::write_help()"
     );
+}
+
+fn ensure_root_dir(root_dir: PathBuf) -> Result<PathBuf, CliError> {
+    if let Err(e) = fs::create_dir_all(&root_dir) {
+        return Err(CliError::RuntimeError(format!(
+            "Failed to create root dir {}: {e}",
+            root_dir.display()
+        )));
+    }
+    Ok(root_dir)
 }

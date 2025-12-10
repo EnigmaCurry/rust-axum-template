@@ -63,32 +63,34 @@ sudo install \
 The application uses a multi-source configuration system, coming from
 the following layers (from highest to lowest priority):
 
- 1. Command line arguments. Every configuration setting has a long
+ 1. **Command line arguments**. Every configuration setting has a long
     form CLI argument (e.g., `--some-setting foo`). Explicit args like
     this have the highest priority and override the setting from all
     other layers.
 
- 2. Environment variables. Every configuration setting has an
+ 2. **Environment variables**. Every configuration setting has an
     associated environment variable that you may set. This is the
     preferred configuration style for Docker containers. The app
     specific settings all have a unique prefix `${APP_PREFIX}_`.
 
- 3. Configuration file. The application has an optional config file in
-    it's data root (`config.toml`). This is the lowest layer that is
-    configurable by the user.
+ 3. **User Defaults**. The application has an optional config file in
+    it's data root (`defaults.toml`). This file dynamically overrides
+    the application's *default* settings and help messages.
 
- 4. Application defaults. Every configuration setting has a builtin
-    default value. Implicit args like this have the lowest priority.
+ 4. **Application defaults**. Every configuration setting has a
+    default value compiled into the binary.
 
 ### Application storage (stateful data)
 
-By default, the application stores files it creates in
-`${HOME}/.local/share/${APP}`. This includes the SQLite database
-files, ACME accounts, and TLS certificates.
+The application needs to store its SQLite database files, ACME
+accounts, and TLS certificates. By default, the application creates
+files in `${XDG_DATA_HOME}/${APP}`, or `${HOME}/.local/share/${APP}`
+(if no `XDG_DATA_HOME` is set) or `./${APP}-data` (if no `HOME`
+variable is set).
 
 If you want to use a different path, or if you want to support
-multiple instances of the app, you need to override the directory path
-by any of the following methods:
+multiple instances of the app, you need to override the path using any
+of the following methods:
 
  * Use the command line arguments `-C PATH` or `--root-dir PATH`.
  * Set the `ROOT_DIR` environment variable.
