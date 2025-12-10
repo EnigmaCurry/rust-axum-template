@@ -21,10 +21,10 @@
      that terminates TLS on its behalf).
  * OpenAPI specification built with
    [aide](https://github.com/tamasfe/aide/).
- * Interactive API docs with your choice of
-   [Scalar](https://github.com/ScalaR/ScalaR),
-   [Redoc](https://github.com/Redocly/redoc), or [Swagger
-   UI](https://github.com/swagger-api/swagger-ui?tab=readme-ov-file).
+   * Interactive API docs with your choice of
+     [Scalar](https://github.com/ScalaR/ScalaR),
+     [Redoc](https://github.com/Redocly/redoc), or [Swagger
+     UI](https://github.com/swagger-api/swagger-ui?tab=readme-ov-file).
  * Multiple user authentication backends:
    * Username / Password.
    * Forward Auth via trusted header (Traefik Proxy or compatible proxy layer).
@@ -36,13 +36,18 @@
  * Bash / Fish / Zsh shell (tab)
    [completion](https://docs.rs/clap_complete/latest/clap_complete/).
  * GitHub actions for tests and releases:
-   * Builds executables for multiple platforms.
-   * Builds Docker images for x86_64 and aarch64.
    * Test coverage report published to GitHub pages.
+   * Builds executables for multiple platforms.
+   * Builds Docker images for X86_64 and AArch64.
    * Publishing crates to crates.io (disabled by default, uncomment in
    [release.yml](template/.github/workflows/release.yml)).
 
 ## Build
+
+ * Install Rust with [rustup](https://rustup.rs/).
+ * Install
+   [Just](https://github.com/casey/just?tab=readme-ov-file#installation)
+   (`cargo install just`)
 
 ```
 just build --release
@@ -60,8 +65,8 @@ sudo install \
 
 ## Configuration
 
-The application uses a multi-source configuration system, coming from
-the following layers (from highest to lowest priority):
+The application uses a multi-source configuration system, consisting
+of the following layers (from highest to lowest priority):
 
  1. **Command line arguments**. Every configuration setting has a long
     form CLI argument (e.g., `--some-setting foo`). Explicit args like
@@ -69,9 +74,8 @@ the following layers (from highest to lowest priority):
     other layers.
 
  2. **Environment variables**. Every configuration setting has an
-    associated environment variable that you may set. This is the
-    preferred configuration style for Docker containers. The app
-    specific settings all have a unique prefix `${APP_PREFIX}_`.
+    associated environment variable. This is the preferred
+    configuration style for Docker containers.
 
  3. **User Defaults**. The application has an optional config file in
     it's data root (`defaults.toml`). This file dynamically overrides
@@ -106,91 +110,79 @@ You should always use TLS, so only use plain HTTP if you are hosting
 behind a reverse proxy that terminates TLS for you:
 
 ```
-export NET_HOST=${APP}.example.org
-export NET_LISTEN_IP=0.0.0.0
-export NET_LISTEN_PORT=80
-export DATABASE_URL=sqlite:data.db
-export AUTH_METHOD=username_password
-export SESSION_SECURE=false
-export RUST_LOG=${APP_MODULE}=info
-
-${APP} serve
+${APP} serve -v \
+  --net-host           ${APP}.example.org \
+  --net-listen-ip      0.0.0.0 \
+  --net-listen-port    8000 \
+  --auth-method        username_password \
+  --session-secure     false
 ```
 
 ### Manual TLS
 
 ```
-export NET_HOST=${APP}.example.org
-export NET_LISTEN_IP=0.0.0.0
-export NET_LISTEN_PORT=443
-export DATABASE_URL=sqlite:data.db
-export AUTH_METHOD=username_password
-export SESSION_SECURE=true
-export TLS_MODE=manual
-export TLS_CERT_PATH=cert.pem
-export TLS_KEY_PATH=key.pem
-export RUST_LOG=${APP_MODULE}=info
-
-${APP} serve
+${APP} serve -v \
+  --net-host           ${APP}.example.org \
+  --net-listen-ip      0.0.0.0 \
+  --net-listen-port    8000 \
+  --auth-method        username_password \
+  --session-secure     true \
+  --tls-mode           manual \
+  --tls-cert-path      cert.pem \
+  --tls-key-path       key.pem
 ```
 
 ### ACME (TLS-ALPN-01)
 
 ```
-export NET_HOST=${APP}.example.org
-export TLS_SANS=
-export NET_LISTEN_IP=0.0.0.0
-export NET_LISTEN_PORT=443
-export DATABASE_URL=sqlite:data.db
-export AUTH_METHOD=username_password
-export SESSION_SECURE=true
-export TLS_MODE=acme
-export TLS_ACME_CHALLENGE=tls-alpn-01
-export TLS_ACME_DIRECTORY_URL=https://acme-v02.api.letsencrypt.org/directory
-export TLS_ACME_EMAIL=
-export RUST_LOG=${APP_MODULE}=info
-
-${APP} serve
+${APP} serve -v \
+  --net-host               ${APP}.example.org \
+  --net-listen-ip          0.0.0.0 \
+  --net-listen-port        443 \
+  --auth-method            username_password \
+  --session-secure         true \
+  --tls-mode               acme \
+  --tls-acme-challenge     tls-alpn-01 \
+  --tls-acme-directory-url https://acme-v02.api.letsencrypt.org/directory \
+  --tls-acme-email         ""
 ```
+
+Note: TLS-ALPN-01 only work on port 443. So you need to run as `root`.
 
 ### ACME (DNS-01 via ACME-DNS)
 
 ```
-export NET_HOST=${APP}.example.org
-export TLS_SANS=
-export NET_LISTEN_IP=0.0.0.0
-export NET_LISTEN_PORT=443
-export DATABASE_URL=sqlite:data.db
-export AUTH_METHOD=username_password
-export SESSION_SECURE=true
-export TLS_MODE=acme
-export TLS_ACME_CHALLENGE=dns-01
-export TLS_ACME_DIRECTORY_URL=https://acme-v02.api.letsencrypt.org/directory
-export TLS_ACME_EMAIL=
-export ACME_DNS_API_BASE=https://auth.acme-dns.io
-export RUST_LOG=${APP_MODULE}=info
-
-## Register ACME-DNS account 
-## Follow the instructions it gies to create CNAME records:
-${APP} acme-dns-register
+## Register your ACME-DNS account. 
+## Specify all of your domains (SANS) to get help with the CNAME records:
+${APP} acme-dns-register \
+  --net-host  ${APP}.example.org \
+  --tls-san ""
 
 ## Loads ACME-DNS credentials and provisions cert on first run:
-${APP} serve
+${APP} serve -v \
+  --net-host               ${APP}.example.org \
+  --net-listen-ip          0.0.0.0 \
+  --net-listen-port        8443 \
+  --auth-method            username_password \
+  --session-secure         true \
+  --tls-mode               acme \
+  --tls-san                "" \
+  --tls-acme-challenge     dns-01 \
+  --tls-acme-directory-url https://acme-v02.api.letsencrypt.org/directory \
+  --tls-acme-email         "" \
+  --acme-dns-api-base      https://auth.acme-dns.io
 ```
 
 ### Self-Signed TLS
 
 ```
-export NET_HOST=${APP}.example.org
-export NET_LISTEN_IP=0.0.0.0
-export NET_LISTEN_PORT=443
-export DATABASE_URL=sqlite:data.db
-export AUTH_METHOD=username_password
-export SESSION_SECURE=true
-export TLS_MODE=self-signed
-export RUST_LOG=${APP_MODULE}=info
-
-${APP} serve
+${APP} serve -v \
+  --net-host               ${APP}.example.org \
+  --net-listen-ip          0.0.0.0 \
+  --net-listen-port        8443 \
+  --auth-method            username_password \
+  --session-secure         true \
+  --tls-mode               self-signed
 ```
 
 ## Development
