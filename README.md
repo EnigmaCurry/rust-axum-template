@@ -30,19 +30,7 @@ For the full list of features, see the embedded
    * Find `Source` and set it to `GitHub Actions`. (**Not** `Deploy
      from a branch`)
 
-## Clone your new repository to your workstation.
-
-```
-## For example:
-FORGE=github.com
-USERNAME=your_username
-REPOSITORY=your_repository
-
-git clone git@${FORGE}:${USERNAME}/${REPOSITORY}.git \
-   ~/git/vendor/${USERNAME}/${REPOSITORY}
-
-cd ~/git/vendor/${USERNAME}/${REPOSITORY}
-```
+ * Clone your new repository to your workstation.
 
 ## Render the template
 
