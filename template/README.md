@@ -32,9 +32,8 @@
  * Admin web interface.
  * [Just](https://github.com/casey/just) enabled project build
    targets.
- * [Clap](https://docs.rs/clap/latest/clap/) CLI argument parser.
- * Bash / Fish / Zsh shell (tab)
-   [completion](https://docs.rs/clap_complete/latest/clap_complete/).
+ * [Conf](https://github.com/cbeck88/conf-rs) CLI argument parser.
+   * Shell (tab) completion support for Bash / Fish / Zsh.
  * GitHub actions for tests and releases:
    * Test coverage report published to GitHub pages.
    * Builds executables for multiple platforms.
@@ -241,3 +240,34 @@ build`) and running the static binary
 `{{app_name}}/target/debug/{{app_name}}`.
 
 Also see [DEVELOPMENT.md](DEVELOPMENT.md)
+
+## Shell completion
+
+To set up tab completion in your favorite shell:
+
+### Bash
+
+Put this in your `~/.bashrc` or similar:
+
+```
+## Enable completion for Bash:
+source <(${APP} completions bash)
+```
+
+### Zsh
+
+Put this in your `~/.zshrc` or similar:
+
+```
+# Enable completion for Zsh:
+source <(${APP} completions zsh)
+```
+
+### Fish
+
+Put this in your `~/.config/fish/config.fish` or similar:
+
+```
+# Enable completion for Fish:
+${APP} completions fish > ~/.config/fish/completions/${APP}.fish
+```
