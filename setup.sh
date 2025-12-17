@@ -29,8 +29,11 @@ ask_no_blank "Enter your Git forge username or org name" GIT_USERNAME "${GIT_USE
 export APP
 export GIT_USERNAME="${GIT_USERNAME,,}"
 export YEAR="$(date +%Y)"
-export APP_PREFIX="${APP^^}"
-export APP_PREFIX="${APP_PREFIX//[ -]/_}"
+export APP_PREFIX=${APP^^}
+APP_PREFIX="${APP_PREFIX//[ -]/_}"   # space/dash -> underscore
+APP_PREFIX="${APP_PREFIX##_}"        # trim leading underscores
+APP_PREFIX="${APP_PREFIX%%_}"        # trim trailing underscores
+APP_PREFIX="${APP_PREFIX}_"          # append final underscore
 export APP_MODULE="${APP_PREFIX,,}"
 export GIT_REPOSITORY="https://${GIT_FORGE}/${GIT_USERNAME}/${APP}"
 
