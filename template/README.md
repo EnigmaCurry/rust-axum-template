@@ -119,11 +119,8 @@ files in `${XDG_DATA_HOME}/${APP}`, or `${HOME}/.local/share/${APP}`
 variable is set).
 
 If you want to use a different path, or if you want to support
-multiple instances of the app, you need to override the path using any
-of the following methods:
-
- * Use the command line arguments `-C PATH` or `--root-dir PATH`.
- * Set the `ROOT_DIR` environment variable.
+multiple instances of the app, you need to override the path using the
+command line argument `-C PATH` or `--root-dir PATH`.
 
 ## Run
 

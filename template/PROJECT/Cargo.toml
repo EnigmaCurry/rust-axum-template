@@ -23,8 +23,6 @@ axum = { version = "0.8.7", features = ["multipart"] }
 bcrypt = "0.17.1"
 bytes = "1.11.0"
 chrono = { version = "0.4.42", features = ["serde"] }
-clap = { version = "4.0.11", features = ["derive", "string", "env"] }
-clap_complete = "4.5.29"
 dirs = "5.0.1"
 env_logger = "0.11.5"
 indexmap = { version = "2.12.1", features = ["serde"] }
@@ -49,6 +47,7 @@ tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 uuid = { version = "1.18.1", features = ["serde", "v4"] }
 schemars = { version = "0.9", features = ["derive"] }
 api-doc-macros = { path = "../api-doc-macros" }
+app-macros = { path = "../app-macros" }
 axum-server = { version = "0.7.3", features = ["tls-rustls"] }
 rcgen = "0.14.5"
 x509-parser = "0.18.0"
@@ -64,7 +63,7 @@ url = "2.5.7"
 tokio-stream = "0.1.17"
 thiserror = "2.0.17"
 toml = "0.9.8"
-clap-serde-derive = "0.2.1"
+conf = { git = "https://github.com/EnigmaCurry/conf-rs", branch="shell-serialize-derive", features = ["completion"]}
 
 [dev-dependencies]
 shell-words = "1.1.0"

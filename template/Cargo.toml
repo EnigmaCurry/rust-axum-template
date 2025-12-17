@@ -2,4 +2,5 @@
 members = [
   "${APP}",
   "api-doc-macros",
+  "app-macros"
 ]

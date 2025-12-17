@@ -1,57 +1,60 @@
-use clap::{self, ArgAction, Args, CommandFactory, Parser, Subcommand, ValueEnum};
-use clap_serde_derive::ClapSerde;
-
-use std::{env, path::PathBuf};
+use std::{env, fmt, path::PathBuf, str::FromStr};
 
 use crate::errors::CliError;
 
 use super::{AcmeDnsRegisterConfig, ServeConfig};
+use conf::{Conf, Subcommands, anstyle::AnsiColor, completion::Shell};
+use serde::{Deserialize, Serialize};
 
-#[derive(Parser)]
-#[command(
-    name = env!("CARGO_BIN_NAME"),
-    version = env!("CARGO_PKG_VERSION"),
-    author = env!("CARGO_PKG_AUTHORS"),
-    about = env!("CARGO_PKG_DESCRIPTION"),
-    propagate_version = true
-)]
+#[derive(Debug, Clone)]
+pub struct RootDir(pub PathBuf);
+
+impl FromStr for RootDir {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(RootDir(PathBuf::from(s)))
+    }
+}
+
+impl fmt::Display for RootDir {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Good enough for help text / env hint
+        write!(f, "{}", self.0.to_string_lossy())
+    }
+}
+
+const HELP_STYLES: conf::Styles = conf::Styles::styled()
+    .header(AnsiColor::Blue.on_default().bold())
+    .usage(AnsiColor::Blue.on_default().bold())
+    .literal(AnsiColor::White.on_default())
+    .placeholder(AnsiColor::Green.on_default());
+
+#[derive(Conf, Debug, Clone)]
+#[conf(serde, styles = HELP_STYLES)]
 pub struct Cli {
     /// Sets the log level, overriding the RUST_LOG environment variable.
-    #[arg(
-        long,
-        global = true,
-        value_name = "LEVEL",
-        value_parser = ["trace", "debug", "info", "warn", "error"]
-    )]
+    #[arg(long)]
     pub log: Option<String>,
 
-    /// Increase verbosity (-v, -vv, -vvv, -vvvv)
-    #[arg(short = 'v', global = true, action = ArgAction::Count)]
+    /// Increase verbosity. You can keep your existing semantics,
+    /// or simplify this to `bool` and adjust `build_log_level`.
+    #[arg(short = 'v')]
+    #[conf(default(0u8))]
     pub verbose: u8,
 
-    /// Base directory for config + state (like `-C` in many GNU tools).
-    ///
-    /// When set, relative paths for the database, TLS cache, ACME accounts,
-    /// and acme-dns credentials are resolved under this directory, and the
-    /// directory is created if needed.
-    #[arg(
-        short = 'C',
-        long = "root-dir",
-        env = "ROOT_DIR",
-        global = true,
-        default_value = default_root_dir().into_os_string(),
-        value_name = "DIR",
-    )]
-    pub root_dir: PathBuf,
+    /// Base directory for config + state.
+    #[arg(short = 'C', long = "root-dir", env = "ROOT_DIR")]
+    #[conf(default(RootDir(default_root_dir())), serde(skip))]
+    pub root_dir: RootDir,
 
-    /// Config file
-    ///
-    /// Defaults to `defaults.toml` in the specified ROOT_DIR, but only
-    /// if it exists.
+    /// Config file (e.g. defaults.toml in ROOT_DIR)
     #[arg(short = 'f', long = "config", env = "CONFIG_FILE")]
-    pub config_file: Option<std::path::PathBuf>,
+    #[conf(serde(skip))]
+    pub config_file: Option<PathBuf>,
 
-    #[command(subcommand)]
+    /// Subcommands.
+    #[conf(subcommands)]
     pub command: Commands,
 }
 
@@ -60,21 +63,25 @@ impl Cli {
         match &self.command {
             // we now validate Serve *after* merging config in run_cli
             Commands::Serve(_) => Ok(()),
-            Commands::Completions { .. } => Ok(()),
             Commands::AcmeDnsRegister { .. } => Ok(()),
+            Commands::Completions(_) => Ok(()),
         }
     }
 }
 
-#[derive(Subcommand)]
-pub enum Commands {
-    /// Generates shell completions script (tab completion).
-    Completions {
-        /// The shell to generate completions for.
-        #[arg(value_parser = ["bash", "zsh", "fish"])]
-        shell: Option<String>,
-    },
+#[derive(Conf, Debug, Clone, Serialize, Deserialize)]
+#[conf(serde)]
+pub struct CompletionArgs {
+    /// Shell to generate completions for (bash|elvish|fish|powershell|zsh)
+    #[conf(pos, serde(skip))]
+    pub shell: Shell,
+}
 
+#[derive(Subcommands, Debug, Clone)]
+#[conf(serde)]
+pub enum Commands {
+    /// Output shell completion scripts
+    Completions(CompletionArgs),
     /// Run the HTTP API server.
     Serve(ServeConfig),
 
@@ -86,27 +93,19 @@ pub enum Commands {
 }
 
 fn default_root_dir() -> PathBuf {
-    // CARGO_BIN_NAME is compile-time, so this is cheap.
     let bin = env!("CARGO_BIN_NAME");
 
-    // 1) If XDG_DATA_HOME is set, prefer it.
-    if let Ok(xdg) = env::var("XDG_DATA_HOME") {
-        if !xdg.is_empty() {
-            return PathBuf::from(xdg).join(bin);
-        }
+    if let Ok(xdg) = env::var("XDG_DATA_HOME")
+        && !xdg.is_empty()
+    {
+        return PathBuf::from(xdg).join(bin);
     }
 
-    // 2) Fallback: ~/.local/share/<bin>
-    if let Ok(home) = env::var("HOME") {
-        if !home.is_empty() {
-            return PathBuf::from(home).join(".local").join("share").join(bin);
-        }
+    if let Ok(home) = env::var("HOME")
+        && !home.is_empty()
+    {
+        return PathBuf::from(home).join(".local").join("share").join(bin);
     }
 
-    // 3) Last resort: current directory / <bin>-data
     PathBuf::from(format!("{bin}-data"))
-}
-
-pub fn app() -> clap::Command {
-    Cli::command()
 }
