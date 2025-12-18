@@ -32,7 +32,11 @@
  * Admin web interface.
  * [Just](https://github.com/casey/just) enabled project build
    targets.
- * [Conf](https://github.com/cbeck88/conf-rs) CLI argument parser.
+ * "12 factor" style configuration with [Conf](https://github.com/cbeck88/conf-rs)
+   * CLI argument parser.
+   * Enviornment variable parser.
+   * Config file parser.
+   * Factory defaults.
    * Shell (tab) completion support for Bash / Fish / Zsh.
  * GitHub actions for tests and releases:
    * Test coverage report published to GitHub pages.
