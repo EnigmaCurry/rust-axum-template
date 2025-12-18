@@ -1,6 +1,6 @@
-use std::{env, fmt, path::PathBuf, str::FromStr};
+use std::{env, fmt, io::Write, path::PathBuf, str::FromStr};
 
-use crate::errors::CliError;
+use crate::{config::default_root_dir, errors::CliError};
 
 use super::{AcmeDnsRegisterConfig, ServeConfig};
 use conf::{Conf, Subcommands, anstyle::AnsiColor, completion::Shell};
@@ -92,20 +92,29 @@ pub enum Commands {
     AcmeDnsRegister(AcmeDnsRegisterConfig),
 }
 
-fn default_root_dir() -> PathBuf {
-    let bin = env!("CARGO_BIN_NAME");
-
-    if let Ok(xdg) = env::var("XDG_DATA_HOME")
-        && !xdg.is_empty()
-    {
-        return PathBuf::from(xdg).join(bin);
+pub(crate) fn write_conf_error<W1: Write, W2: Write>(e: &conf::Error, out: &mut W1, err: &mut W2) {
+    // In clap, help/version typically exit with code 0 (stdout-y),
+    // while real argument errors are nonzero (stderr-y).
+    let mut msg = e.to_string();
+    if !msg.ends_with('\n') {
+        msg.push('\n');
     }
 
-    if let Ok(home) = env::var("HOME")
-        && !home.is_empty()
-    {
-        return PathBuf::from(home).join(".local").join("share").join(bin);
+    if e.exit_code() == 0 {
+        let _ = out.write_all(msg.as_bytes());
+    } else {
+        let _ = err.write_all(msg.as_bytes());
     }
+}
 
-    PathBuf::from(format!("{bin}-data"))
+pub(crate) fn args_after_subcommand(
+    args: &[std::ffi::OsString],
+    sub: &str,
+) -> Option<Vec<std::ffi::OsString>> {
+    let bin = args.get(0)?.clone();
+    let idx = args.iter().position(|a| a.to_string_lossy() == sub)?;
+    let mut out = Vec::with_capacity(1 + (args.len().saturating_sub(idx + 1)));
+    out.push(bin);
+    out.extend_from_slice(&args[idx + 1..]);
+    Some(out)
 }

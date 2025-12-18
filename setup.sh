@@ -12,7 +12,7 @@ debug_var ROOT_DIR
 check_deps cargo just pnpm envsubst sed
 
 echo
-ask_no_blank "Enter your git forge domain" GIT_FORGE "github.com"
+ask_no_blank "Enter your git forge domain (e.g. forgejo.example.com or github.com)" GIT_FORGE "github.com"
 
 APP="$(basename "$ROOT_DIR")"
 APP="$(printf '%s' "$APP" | sed -E 's/[^[:alnum:]-]+/-/g')"
@@ -28,7 +28,6 @@ ask_no_blank "Enter your Git forge username or org name" GIT_USERNAME "${GIT_USE
 
 export APP
 export GIT_USERNAME="${GIT_USERNAME,,}"
-export YEAR="$(date +%Y)"
 export APP_PREFIX=${APP^^}
 APP_PREFIX="${APP_PREFIX//[ -]/_}"   # space/dash -> underscore
 APP_PREFIX="${APP_PREFIX##_}"        # trim leading underscores
@@ -38,10 +37,9 @@ export APP_MODULE="${APP_PREFIX,,}"
 export GIT_REPOSITORY="https://${GIT_FORGE}/${GIT_USERNAME}/${APP}"
 
 echo
-check_var APP GIT_USERNAME YEAR
+check_var APP GIT_USERNAME
 debug_var APP
 debug_var GIT_USERNAME
-debug_var YEAR
 debug_var GIT_REPOSITORY
 
 echo
@@ -61,7 +59,7 @@ while IFS= read -r -d '' file; do
     mkdir -p "$(dirname "$DEST_PATH")"
 
     # Replace variables using envsubst and copy the file
-    envsubst '${APP} ${APP_PREFIX} ${APP_MODULE} ${GIT_FORGE} ${GIT_USERNAME} ${GIT_REPOSITORY} ${YEAR}' < "$file" > "$DEST_PATH"
+    envsubst '${APP} ${APP_PREFIX} ${APP_MODULE} ${GIT_FORGE} ${GIT_USERNAME} ${GIT_REPOSITORY}' < "$file" > "$DEST_PATH"
     echo "Processed: $file -> $DEST_PATH"
 done < <(find "$TEMPLATE_DIR" -type f -print0)
 

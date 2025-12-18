@@ -3,17 +3,20 @@ use crate::middleware::auth::AuthenticationMethod;
 use conf::Conf;
 use serde::{Deserialize, Serialize};
 
+const DEFAULT_TRUSTED_USER_HEADER: &str = "x-forwarded-user";
+const DEFAULT_FORWARDED_FOR_HEADER: &str = "x-forwarded-for";
+
 #[derive(Conf, Debug, Clone, Serialize, Deserialize)]
 #[conf(serde)]
 pub struct AuthConfig {
     /// Authentication method to use: forward_auth or username_password.
     #[arg(long = "auth-method", env = "AUTH_METHOD")]
     #[conf(default(AuthenticationMethod::UsernamePassword))]
-    pub authentication_method: AuthenticationMethod,
+    pub method: AuthenticationMethod,
 
     /// Header to read the authenticated user email from.
     #[arg(long = "auth-trusted-header-name", env = "AUTH_TRUSTED_HEADER_NAME")]
-    #[conf(default("X-Forwarded-For".to_string()))]
+    #[conf(default(DEFAULT_TRUSTED_USER_HEADER.to_string()))]
     pub trusted_header_name: String,
 
     /// Only trust the header when the TCP peer IP matches this proxy.
@@ -32,25 +35,30 @@ pub struct AuthConfig {
         long = "auth-trusted-forwarded-for-name",
         env = "AUTH_TRUSTED_FORWARDED_FOR_NAME"
     )]
-    #[conf(default("X-Forwarded-For".to_string()))]
+    #[conf(default(DEFAULT_FORWARDED_FOR_HEADER.to_string()))]
     pub trusted_forwarded_for_name: String,
+}
+
+impl Default for AuthConfig {
+    fn default() -> Self {
+        Self {
+            method: AuthenticationMethod::UsernamePassword,
+            trusted_header_name: DEFAULT_TRUSTED_USER_HEADER.to_string(),
+            trusted_proxy: None,
+            trusted_forwarded_for: false,
+            trusted_forwarded_for_name: DEFAULT_FORWARDED_FOR_HEADER.to_string(),
+        }
+    }
 }
 
 impl AuthConfig {
     pub fn validate(&self) -> Result<(), CliError> {
-        if matches!(
-            self.authentication_method,
-            AuthenticationMethod::ForwardAuth
-        ) && self.trusted_proxy.is_none()
+        if matches!(self.method, AuthenticationMethod::ForwardAuth) && self.trusted_proxy.is_none()
         {
             return Err(CliError::InvalidArgs(
                 "auth-trusted-proxy is required when auth-method=forward_auth".into(),
             ));
         }
-
-        // You might also enforce that if trusted_forwarded_for is true,
-        // then trusted_proxy is Some(..) too, same pattern.
-
         Ok(())
     }
 }
