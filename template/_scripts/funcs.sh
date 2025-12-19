@@ -129,11 +129,12 @@ check_emacs_unsaved_files() {
 
 template_changelog_files() {
   set -euo pipefail
-
   local base
   base="$(git rev-list --reverse --first-parent HEAD | head -n1)"
 
-  # Skip set: files that were purely moved/copied out of template/ with no content changes.
+  # ------------------------------------------------------------------
+  # 1️⃣  Detect pure moves/copies out of the `template/` tree.
+  # ------------------------------------------------------------------
   local -A skip=()
   while IFS=$'\t' read -r status old new; do
     case "$status" in
@@ -143,13 +144,29 @@ template_changelog_files() {
     esac
   done < <(git diff --name-status -M --diff-filter=RC "${base}..HEAD")
 
+  # ------------------------------------------------------------------
+  # 2️⃣  Files we always want to ignore, no matter what.
+  # ------------------------------------------------------------------
+  # (you can add more entries here, e.g. LICENSE, CONTRIBUTING.md, …)
+  local -a always_skip=( README.md DEVELOPMENT.md )
+
+  # ------------------------------------------------------------------
+  # 3️⃣  Walk the changed‑file list, apply the various filters.
+  # ------------------------------------------------------------------
   git diff --name-only --diff-filter=AMCR "${base}..HEAD" \
     | LC_ALL=C sort -u \
     | while IFS= read -r f; do
-        # Drop pure moves from template/ (unchanged content)
+
+        # ── a)  Skip pure moves/copies from the template tree
         [[ -n "${skip[$f]:-}" ]] && continue
 
-        # Find a base path to compare against (handles template/ -> root move)
+        # ── b)  Skip the hard‑coded list from step 2
+        for ignore in "${always_skip[@]}"; do
+          [[ "$f" == "$ignore" ]] && continue 2   # ‘continue 2’ jumps out of the for‑loop *and* the while‑loop
+        done
+
+        # ── c)  Find the path we have to compare against in the base commit.
+        #      Handles both “template/foo → foo” and “foo unchanged”.
         local base_path=""
         if git cat-file -e "${base}:${f}" 2>/dev/null; then
           base_path="$f"
@@ -157,15 +174,16 @@ template_changelog_files() {
           base_path="template/${f}"
         fi
 
-        # If not present in base at either location, treat as new/unknown -> include
+        # ── d)  If the file does not exist in the base commit at either location,
+        #      it is a brand‑new file → always include it.
         if [[ -z "$base_path" ]]; then
           printf '%s\n' "$f"
           continue
         fi
 
+        # ── e)  Special handling for .env‑dist (your original logic)
         case "$f" in
           .env-dist)
-            # Ignore if ONLY these keys changed (values may differ)
             if (diff -U0 <(git show "${base}:${base_path}") "$f" || true) \
               | awk '
                   /^--- /    { next }
@@ -184,6 +202,7 @@ template_changelog_files() {
             ;;
         esac
 
+        # ── f)  If we got here the file is “interesting” → emit it.
         printf '%s\n' "$f"
       done
 }
@@ -212,8 +231,8 @@ template_diff() {
       if [[ -z "${seen[$alt]:-}" ]]; then paths+=("$alt"); seen["$alt"]=1; fi
 
       # Optional: if you export APP, also map APP/... to template/PROJECT/...
-      if [[ -n "${APP:-}" && "$p" == "$APP/"* ]]; then
-        alt="template/PROJECT/${p#${APP}/}"
+      if [[ -n "${APP:-}" && "$p" == "axum-dev/"* ]]; then
+        alt="template/PROJECT/${p#axum-dev/}"
         if [[ -z "${seen[$alt]:-}" ]]; then paths+=("$alt"); seen["$alt"]=1; fi
       fi
     done
@@ -222,4 +241,95 @@ template_diff() {
   else
       git -c color.ui=always diff -M "${base}..HEAD" | less -RSX
   fi
+}
+
+fresh_template_branch() {
+    set -euo pipefail
+    export TMP_REMOTE="tmp-import-remote"
+
+    # -----------------------------------------------------------------
+    # Helper: remove the temporary remote (used by the trap and by us)
+    # -----------------------------------------------------------------
+    _clean_tmp_remote() {
+        git remote get-url "${TMP_REMOTE}" >/dev/null 2>&1 && \
+            git remote remove "${TMP_REMOTE}" 2>/dev/null || true
+    }
+
+    # Ensure the temporary remote is removed even if we exit early
+    trap '_clean_tmp_remote' EXIT
+
+    # -----------------------------------------------------------------
+    # Sanity checks
+    # -----------------------------------------------------------------
+    check_deps git
+    git rev-parse --git-dir >/dev/null 2>&1 || fault "Not a git repository."
+    [[ -z "$(git status --porcelain)" ]] || fault "Working tree is dirty."
+
+    # -----------------------------------------------------------------
+    # Get a name for the new orphan branch
+    # -----------------------------------------------------------------
+    ask_no_blank "Enter a name for the new orphan branch" NEW_ORPHAN_BRANCH ""
+    debug_var NEW_ORPHAN_BRANCH
+
+    # Abort if the branch already exists (local or remote)
+    if git show-ref --verify --quiet "refs/heads/${NEW_ORPHAN_BRANCH}" \
+        || git ls-remote --heads . "${NEW_ORPHAN_BRANCH}" | grep -q "${NEW_ORPHAN_BRANCH}"; then
+        fault "Branch '${NEW_ORPHAN_BRANCH}' already exists."
+    fi
+
+    # -----------------------------------------------------------------
+    # Create a clean orphan branch
+    # -----------------------------------------------------------------
+    exe git checkout --orphan "${NEW_ORPHAN_BRANCH}"
+    exe git rm -rf .
+    exe git clean -fdx
+
+    # -----------------------------------------------------------------
+    # Make sure the temporary remote is gone, then add it again
+    # -----------------------------------------------------------------
+    _clean_tmp_remote
+    : "${REMOTE:=https://github.com/EnigmaCurry/rust-axum-template.git}"
+    debug_var REMOTE
+    exe git remote add "${TMP_REMOTE}" "${REMOTE}"
+    exe git fetch "${TMP_REMOTE}"
+
+    # -----------------------------------------------------------------
+    # Verify the remote branch exists and capture its SHA‑1
+    # -----------------------------------------------------------------
+    : "${BRANCH:=master}"
+    debug_var BRANCH
+    if ! git rev-parse --verify "${TMP_REMOTE}/${BRANCH}" >/dev/null 2>&1; then
+        fault "Remote '${REMOTE}' does not contain branch '${BRANCH}'."
+    fi
+    # The SHA‑1 we are about to squash
+    REMOTE_SHA=$(git rev-parse "${TMP_REMOTE}/${BRANCH}")
+
+    # -----------------------------------------------------------------
+    # Bring the remote snapshot into the empty work‑tree
+    # -----------------------------------------------------------------
+    exe git checkout "${TMP_REMOTE}/${BRANCH}" -- .
+
+    # -----------------------------------------------------------------
+    # Stage everything and create a **single** commit.
+    # The message now contains remote, branch and SHA.
+    # -----------------------------------------------------------------
+    exe git add -A
+    COMMIT_MSG="init: ${REMOTE} ${BRANCH} ${REMOTE_SHA}"
+    exe git commit -m "${COMMIT_MSG}"
+
+    # -----------------------------------------------------------------
+    # Sanity‑check that we really have exactly one commit
+    # -----------------------------------------------------------------
+    [[ $(git rev-list --count HEAD) -eq 1 ]] || fault "Unexpected commit count."
+
+    # -----------------------------------------------------------------
+    # Clean up the temporary remote (the trap will also do this on EXIT)
+    # -----------------------------------------------------------------
+    exe git remote remove "${TMP_REMOTE}"
+
+    # -----------------------------------------------------------------
+    # Success message
+    # -----------------------------------------------------------------
+    stderr
+    stderr "✅ Fresh template branch '${NEW_ORPHAN_BRANCH}' created – single commit \"${COMMIT_MSG}\"."
 }
