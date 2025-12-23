@@ -3,11 +3,7 @@
   import { Button } from "$lib/components/ui/button/index.js";
   import * as Card from "$lib/components/ui/card/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
-  import {
-    FieldGroup,
-    Field,
-    FieldLabel,
-  } from "$lib/components/ui/field/index.js";
+  import { FieldGroup, Field, FieldLabel } from "$lib/components/ui/field/index.js";
 
   const {
     id,
@@ -16,15 +12,18 @@
     logoutAction = "/api/logout",
   } = $props();
 
-  // --- reactive state (Svelte 5 runes) ---
   let email = $state("");
   let password = $state("");
 
   let csrfToken = $state("");
   let isLoggedIn = $state(false);
-  let userId = $state(null); // external_user_id
+  let userId = $state(null);
+
   let loading = $state(false);
   let errorMsg = $state("");
+
+  // ✅ gate initial render on this
+  let sessionLoaded = $state(false);
 
   function applyWhoami(json) {
     const session = json?.data?.session;
@@ -34,10 +33,15 @@
   }
 
   async function fetchWhoami() {
-    const res = await fetch(whoami, { credentials: "include" });
-    const json = await res.json().catch(() => null);
-    applyWhoami(json);
-    return { res, json };
+    try {
+      const res = await fetch(whoami, { credentials: "include" });
+      const json = await res.json().catch(() => null);
+      applyWhoami(json);
+      return { res, json };
+    } finally {
+      // ✅ ensures we stop showing the spinner even if whoami errors
+      sessionLoaded = true;
+    }
   }
 
   onMount(fetchWhoami);
@@ -56,7 +60,7 @@
         "Content-Type": "application/json",
         "X-CSRF-Token": csrfToken,
       },
-      body: bodyObj ? JSON.stringify(bodyObj) : "{}",
+      body: JSON.stringify(bodyObj ?? {}),
     });
   }
 
@@ -71,11 +75,9 @@
       return;
     }
 
-    // try login
     let res = await postJson(loginAction, { email, password });
     let json = await res.json().catch(() => null);
 
-    // if csrf rotated/expired, refresh token once and retry
     if (
       res.status === 401 &&
       (json?.error?.code === "csrf_invalid" || json?.error?.code === "csrf_missing")
@@ -86,15 +88,11 @@
     }
 
     if (!res.ok || json?.error) {
-      errorMsg =
-        json?.error?.message ??
-        json?.error ??
-        `Login failed (HTTP ${res.status})`;
+      errorMsg = json?.error?.message ?? json?.error ?? `Login failed (HTTP ${res.status})`;
       loading = false;
       return;
     }
 
-    // refresh session state
     await fetchWhoami();
     password = "";
     loading = false;
@@ -113,7 +111,6 @@
     let res = await postJson(logoutAction, null);
     let json = await res.json().catch(() => null);
 
-    // retry once on csrf mismatch
     if (
       res.status === 401 &&
       (json?.error?.code === "csrf_invalid" || json?.error?.code === "csrf_missing")
@@ -124,74 +121,82 @@
     }
 
     if (!res.ok || json?.error) {
-      errorMsg =
-        json?.error?.message ??
-        json?.error ??
-        `Logout failed (HTTP ${res.status})`;
+      errorMsg = json?.error?.message ?? json?.error ?? `Logout failed (HTTP ${res.status})`;
       loading = false;
       return;
     }
 
+    // ✅ token is refreshed on logout; grab the new one
     await fetchWhoami();
     loading = false;
   }
 </script>
 
-<Card.Root class="mx-auto w-full max-w-sm">
-  <Card.Header>
-    {#if isLoggedIn}
-      <Card.Title class="text-2xl">You’re signed in</Card.Title>
-      <Card.Description>
-        Signed in as <span class="font-mono">{userId ?? "(unknown)"}</span>
-      </Card.Description>
-    {:else}
-      <Card.Title class="text-2xl">Sign in</Card.Title>
-      <Card.Description>Enter your account credentials:</Card.Description>
-    {/if}
-  </Card.Header>
+{#if !sessionLoaded}
+  <!-- blank-ish page + centered loader -->
+  <div class="mx-auto flex w-full max-w-sm items-center justify-center py-10">
+    <div
+      class="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent"
+      aria-label="Loading"
+    ></div>
+  </div>
+{:else}
+  <Card.Root class="mx-auto w-full max-w-sm">
+    <Card.Header>
+      {#if isLoggedIn}
+        <Card.Title class="text-2xl">You’re signed in</Card.Title>
+        <Card.Description>
+          Signed in as <span class="font-mono">{userId ?? "(unknown)"}</span>
+        </Card.Description>
+      {:else}
+        <Card.Title class="text-2xl">Sign in</Card.Title>
+        <Card.Description>Enter your account credentials:</Card.Description>
+      {/if}
+    </Card.Header>
 
-  <Card.Content>
-    {#if errorMsg}
-      <p class="mb-3 text-sm text-red-600">{errorMsg}</p>
-    {/if}
+    <Card.Content>
+      {#if errorMsg}
+        <p class="mb-3 text-sm text-red-600">{errorMsg}</p>
+      {/if}
 
-    {#if isLoggedIn}
-      <Button class="w-full" onclick={submitLogout} disabled={loading}>
-        {loading ? "Signing out…" : "Logout"}
-      </Button>
-    {:else}
-      <form onsubmit={submitLogin}>
-        <FieldGroup>
-          <Field>
-            <FieldLabel for={"email-" + id}>Email</FieldLabel>
-            <Input
-              id={"email-" + id}
-              type="email"
-              placeholder="m@example.com"
-              autocomplete="email"
-              required
-              bind:value={email}
-            />
-          </Field>
+      {#if isLoggedIn}
+        <Button class="w-full" onclick={submitLogout} disabled={loading}>
+          {loading ? "Signing out…" : "Logout"}
+        </Button>
+      {:else}
+        <form onsubmit={submitLogin}>
+          <FieldGroup>
+            <Field>
+              <FieldLabel for={"email-" + id}>Email</FieldLabel>
+              <Input
+                id={"email-" + id}
+                type="email"
+                placeholder="m@example.com"
+                autocomplete="email"
+                required
+                bind:value={email}
+              />
+            </Field>
 
-          <Field>
-            <FieldLabel for={"password-" + id}>Password</FieldLabel>
-            <Input
-              id={"password-" + id}
-              type="password"
-              autocomplete="current-password"
-              required
-              bind:value={password}
-            />
-          </Field>
+            <Field>
+              <FieldLabel for={"password-" + id}>Password</FieldLabel>
+              <Input
+                id={"password-" + id}
+                type="password"
+                autocomplete="current-password"
+                required
+                bind:value={password}
+              />
+            </Field>
 
-          <Field>
-            <Button type="submit" class="w-full" disabled={loading}>
-              {loading ? "Logging in…" : "Login"}
-            </Button>
-          </Field>
-        </FieldGroup>
-      </form>
-    {/if}
-  </Card.Content>
-</Card.Root>
+            <Field>
+              <Button type="submit" class="w-full" disabled={loading}>
+                {loading ? "Logging in…" : "Login"}
+              </Button>
+            </Field>
+          </FieldGroup>
+        </form>
+      {/if}
+    </Card.Content>
+  </Card.Root>
+{/if}
