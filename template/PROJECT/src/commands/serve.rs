@@ -3,16 +3,19 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use axum::http::HeaderName;
-use tracing::{debug, error, info};
-
 use crate::{
-    config::{AppConfig, TlsAcmeChallenge, TlsMode},
+    config::{AppConfig, TlsAcmeChallenge, TlsMode, database::build_db_url},
     ensure_root_dir,
     errors::CliError,
     middleware::{self, auth::AuthenticationMethod},
     server,
+    util::write_files::create_private_dir_all_0700_sync,
 };
+use anyhow::Context;
+use axum::http::HeaderName;
+use tracing::{debug, error, info};
+
+static TLS_CACHE_DIR: &'static str = "tls-cache";
 
 pub struct ServePlan {
     pub addr: SocketAddr,
@@ -28,7 +31,7 @@ pub struct ServePlan {
 fn plan_serve(cfg: &AppConfig, root_dir: &Path) -> Result<ServePlan, CliError> {
     let addr = parse_listen_addr(cfg)?;
     let tls_config = build_tls_config(cfg, root_dir)?;
-    let db_url = build_db_url(cfg, root_dir);
+    let db_url = build_db_url(cfg.database.url.clone(), root_dir);
     let (auth_cfg, fwd_cfg) = build_auth_cfgs(cfg)?;
 
     Ok(ServePlan {
@@ -92,10 +95,10 @@ fn build_tls_config(cfg: &AppConfig, root_dir: &Path) -> Result<server::TlsConfi
 
         TlsMode::Manual => {
             let cert_path = cfg.tls.cert_path.clone().ok_or_else(|| {
-                CliError::InvalidArgs("Missing --tls-cert-path for --tls-mode=manual".to_string())
+                CliError::InvalidArgs("Missing --tls-cert for --tls-mode=manual".to_string())
             })?;
             let key_path = cfg.tls.key_path.clone().ok_or_else(|| {
-                CliError::InvalidArgs("Missing --tls-key-path for --tls-mode=manual".to_string())
+                CliError::InvalidArgs("Missing --tls-key for --tls-mode=manual".to_string())
             })?;
 
             info!(
@@ -111,30 +114,37 @@ fn build_tls_config(cfg: &AppConfig, root_dir: &Path) -> Result<server::TlsConfi
         }
 
         TlsMode::SelfSigned => {
-            let cache_dir = Some(root_dir.join("tls-cache"));
+            let cache_dir = if cfg.tls.self_signed_ephemeral {
+                None
+            } else {
+                Some(root_dir.join(TLS_CACHE_DIR))
+            };
             let sans = cfg.tls.sans.0.clone();
-            let valid_days = cfg.tls.self_signed_valid_days;
+            let leaf_valid_secs = cfg.tls.effective_self_signed_valid_seconds();
+            let ca_valid_secs = cfg.tls.effective_ca_cert_valid_seconds();
 
             info!(
-                "TLS mode: self-signed (HTTPS) – cache_dir={:?}, sans={:?}, valid_days={}",
-                cache_dir, sans, valid_days
+                "TLS mode: self-signed (HTTPS) – cache_dir={:?}, sans={:?}",
+                cache_dir, sans
+            );
+            debug!(
+                "TLS leaf_valid_secs={}, ca_valid_secs={}",
+                leaf_valid_secs, ca_valid_secs
             );
 
             Ok(server::TlsConfig::SelfSigned {
                 cache_dir,
                 sans,
-                valid_days,
+                leaf_valid_secs,
+                ca_valid_secs,
             })
         }
 
         TlsMode::Acme => {
-            let cache_dir: PathBuf = root_dir.join("tls-cache");
-            std::fs::create_dir_all(&cache_dir).map_err(|e| {
-                CliError::RuntimeError(format!(
-                    "Failed to create TLS cache dir {}: {e}",
-                    cache_dir.display()
-                ))
-            })?;
+            let cache_dir: PathBuf = root_dir.join(TLS_CACHE_DIR);
+            create_private_dir_all_0700_sync(&cache_dir).context((|| {
+                format!("TLS cache dir invalid: {}", cache_dir.display())
+            })())?;
 
             let domains = build_acme_domains(cfg)?;
             let directory_url = cfg.tls.acme_directory_url.clone();
@@ -210,22 +220,12 @@ fn build_acme_domains(cfg: &AppConfig) -> Result<Vec<String>, CliError> {
     if domains.is_empty() {
         return Err(CliError::InvalidArgs(
             "ACME mode requires at least one domain. \
-Provide --tls-san and/or --app-host (or APP_HOST)."
+Provide --tls-san and/or --net-host (or NET_HOST)."
                 .to_string(),
         ));
     }
 
     Ok(domains)
-}
-
-fn build_db_url(cfg: &AppConfig, root_dir: &Path) -> String {
-    match cfg.database.url.as_ref() {
-        None => {
-            let db_path = root_dir.join("data.db");
-            format!("sqlite://{}", db_path.display())
-        }
-        Some(url) => url.clone(),
-    }
 }
 
 fn build_auth_cfgs(
@@ -307,6 +307,7 @@ fn plan_serve_builds_expected_db_url_and_addr() {
         },
         database: crate::config::DatabaseConfig {
             url: None, /* .. */
+            sqlite_path: "sqlite3".to_string(),
         },
         session: crate::config::SessionConfig {
             expiry_seconds: 3600,

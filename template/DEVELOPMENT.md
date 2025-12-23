@@ -1,9 +1,9 @@
 # Development
 
+## Install host dependencies
+
 These instructions are specific to Fedora; minor adjustments for your
 platform may be required.
-
-## Install host dependencies
 
 ```
 sudo dnf install git openssh rustup
@@ -20,7 +20,7 @@ rustup-init ## just press enter when prompted for default selection
 ## Clone source repository
 
 ```
-git clone git@${GIT_FORGE}:${GIT_USERNAME}/${APP}.git \
+git clone git@github.com:${GIT_USERNAME}/${APP}.git \
   ~/git/vendor/${GIT_USERNAME}/${APP}
 cd ~/git/vendor/${GIT_USERNAME}/${APP}
 ```
@@ -57,6 +57,39 @@ Now you can run `${APP}` from any directory, with
 any arguments, and it will automatically rebuild from source, and then
 run it with those args. This will have full tab-completion in your shell.
 
+## Configure the .env file
+
+In development only, when using the `just` command, you will use the
+`.env` file. You need to generate it from the included `.env-dist`:
+
+```
+just config
+```
+
+This will copy the provided [.env-dist](template/.env-dist) to `.env`.
+You should edit the generated `.env` file by hand to configure your
+application.
+
+You can set an alternative `.env` file path by setting the `ENV_FILE`
+environment variable.
+
+It is important to know that the program itself does not know how to
+read `.env` files. It is `just` that is loading the .env file and
+setting regular environment variables, which the program can read.
+`just` and `.env` files are only used during development.
+
+## Run the program
+
+```
+# Compile and run on the fly with `just`:
+
+just run [ARGS ...]
+
+# OR, from the compiled binary:
+
+${APP} [ARGS ..]
+```
+
 ## Testing
 
 This project has incomplete testing. [See the latest coverage
@@ -84,6 +117,24 @@ just test-watch
 just clippy
 just clippy --fix
 ```
+
+## Reverse template
+
+If you are developing in a repository that is an instance of this
+template, and you want to merge your changes back into the template:
+
+ * Make sure you have cloned rust-axum-template as a sibling
+   repository in the same parent directory that your project is
+   contained.
+ * Make sure both repositories have a clean git status.
+
+```
+just merge-template-upstream
+```
+
+This will merge all the changes from the project directory into the
+template directory, reverse the project name back into the template
+var `${APP}` and git stage all the changes, ready to be commited.
 
 ## Release (Github actions)
 

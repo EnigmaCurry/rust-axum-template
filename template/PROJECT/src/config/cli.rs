@@ -65,6 +65,8 @@ impl Cli {
             Commands::Serve(_) => Ok(()),
             Commands::AcmeDnsRegister { .. } => Ok(()),
             Commands::Completions(_) => Ok(()),
+            Commands::Config(_) => Ok(()),
+            Commands::Sql(_) => Ok(()),
         }
     }
 }
@@ -82,14 +84,21 @@ pub struct CompletionArgs {
 pub enum Commands {
     /// Output shell completion scripts
     Completions(CompletionArgs),
+
     /// Run the HTTP API server.
     Serve(ServeConfig),
+
+    /// Output a config file using the current config as a template
+    Config(ServeConfig),
 
     /// Register or inspect acme-dns credentials used for DNS-01 ACME.
     ///
     /// Run this once before `serve` when using `--tls-mode=acme --tls-acme-challenge=dns-01`,
     /// unless you are providing ACME_DNS_* credentials explicitly.
     AcmeDnsRegister(AcmeDnsRegisterConfig),
+
+    /// Run SQLite shell with the application's database loaded
+    Sql(ServeConfig),
 }
 
 pub(crate) fn write_conf_error<W1: Write, W2: Write>(e: &conf::Error, out: &mut W1, err: &mut W2) {
@@ -124,7 +133,7 @@ where
     I: IntoIterator<Item = OsString>,
 {
     // Keep this list in sync with your Commands enum variants.
-    const SUBCOMMANDS: &[&str] = &["serve", "acme-dns-register", "completions"];
+    const SUBCOMMANDS: &[&str] = &["serve", "config", "acme-dns-register", "completions"];
 
     let mut it = args.into_iter();
 

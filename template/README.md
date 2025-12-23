@@ -141,7 +141,6 @@ ${APP} serve -v \
   --net-listen-ip      0.0.0.0 \
   --net-listen-port    8000 \
   --auth-method        username_password \
-  --session-secure     false
 ```
 
 ### Automatic self-signed TLS
@@ -152,12 +151,15 @@ ${APP} serve -v \
   --net-listen-ip          0.0.0.0 \
   --net-listen-port        8443 \
   --auth-method            username_password \
-  --session-secure         true \
   --tls-mode               self-signed
 ```
 
 Note: self-signed certificates are not trusted in normal web browsers.
 Use Manual TLS or ACME for production.
+
+The above command will cache the self-signed CA and certificate files
+in your data directory. If you would rather create an ephemeral
+certificate, add the `--tls-self-signed-ephemeral` flag.
 
 ### Manual TLS
 
@@ -167,10 +169,9 @@ ${APP} serve -v \
   --net-listen-ip      0.0.0.0 \
   --net-listen-port    8000 \
   --auth-method        username_password \
-  --session-secure     true \
   --tls-mode           manual \
-  --tls-cert-path      cert.pem \
-  --tls-key-path       key.pem
+  --tls-cert           /path/to/some/cert.pem \
+  --tls-key            /path/to/some/key.pem
 ```
 
 ### ACME (TLS-ALPN-01)
@@ -181,7 +182,6 @@ ${APP} serve -v \
   --net-listen-ip          0.0.0.0 \
   --net-listen-port        443 \
   --auth-method            username_password \
-  --session-secure         true \
   --tls-mode               acme \
   --tls-acme-challenge     tls-alpn-01 \
   --tls-acme-directory-url https://acme-v02.api.letsencrypt.org/directory \
@@ -196,8 +196,13 @@ Note: TLS-ALPN-01 only work on port 443. So you need to run as `root`.
 ## Register your ACME-DNS account. 
 ## Specify all of your domains (SANS) to get help with the CNAME records:
 ${APP} acme-dns-register \
+  --acme-dns-api-base      https://auth.acme-dns.io \
   --net-host  ${APP}.example.org \
   --tls-san ""
+
+## Follow the directions in the output of acme-dns-register.
+## Create the CNAME records it suggests for your domain.
+## Run the `dig` command it suggests to verify the records.
 
 ## Loads ACME-DNS credentials and provisions cert on first run:
 ${APP} serve -v \
@@ -205,45 +210,72 @@ ${APP} serve -v \
   --net-listen-ip          0.0.0.0 \
   --net-listen-port        8443 \
   --auth-method            username_password \
-  --session-secure         true \
   --tls-mode               acme \
-  --tls-san                "" \
   --tls-acme-challenge     dns-01 \
   --tls-acme-directory-url https://acme-v02.api.letsencrypt.org/directory \
-  --tls-acme-email         "" \
   --acme-dns-api-base      https://auth.acme-dns.io
 ```
 
+See optional fields: `--tls-acme-email` if you want to set your ACME
+account email address, `--tls-san` if you want additional SAN records
+for your certificate.
+
+## Write config file
+
+If you would like to transform your command line parameters and
+environment variables into a config file, you may use the `config`
+command.
+
+Here is the same ACME-DNS example as before, except instead of the
+`serve` command, it is using the `config` command:
+
+```
+${APP} command -v \
+  --net-host               ${APP}.example.org \
+  --net-listen-ip          0.0.0.0 \
+  --net-listen-port        8443 \
+  --auth-method            username_password \
+  --tls-mode               acme \
+  --tls-acme-challenge     dns-01 \
+  --tls-acme-directory-url https://acme-v02.api.letsencrypt.org/directory \
+  --acme-dns-api-base      https://auth.acme-dns.io
+```
+
+This outputs the TOML configuration to stdout:
+
+```
+## Example ${APP} config ::
+## (Write this to ~/.local/share/${APP}/defaults.toml)
+## CLI options and env vars will always supercede this file.
+
+[network]
+listen_ip = "0.0.0.0"
+listen_port = 8443
+host = "${APP}.example.org"
+
+[session]
+check_seconds = 60
+expiry_seconds = 60480
+
+[auth]
+method = "UsernamePassword"
+
+[tls]
+mode = "Acme"
+sans = []
+acme_challenge = "Dns01"
+acme_directory_url = "https://acme-v02.api.letsencrypt.org/directory"
+self_signed_ephemeral = false
+acme_dns_api_base = "https://auth.acme-dns.io"
+```
+
+If you write this to `~/.local/share/${APP}/defaults.toml`, then you
+can drop all the command line arguments and then just run `${APP}
+serve` to use it.
+
 ## Development
 
-For development, you are advised to install
-[just](https://github.com/casey/just) and use the targets defined in
-the [Justfile](Justfile).
-
-## Configure the .env file
-
-```
-just config
-```
-
-This will copy the provided [.env-dist](template/.env-dist) to `.env`.
-You should edit the generated `.env` file by hand to configure your
-application.
-
-You can set an alternative `.env` file path by setting the `ENV_FILE`
-environment variable.
-
-## Run the program
-
-```
-just run [ARGS ...]
-```
-
-You can also run the binary directly by building manually (`just
-build`) and running the static binary
-`{{app_name}}/target/debug/{{app_name}}`.
-
-Also see [DEVELOPMENT.md](DEVELOPMENT.md)
+See [DEVELOPMENT.md](DEVELOPMENT.md)
 
 ## Shell completion
 

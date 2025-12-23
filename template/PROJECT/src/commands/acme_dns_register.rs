@@ -2,8 +2,9 @@ use std::io::Write;
 
 use crate::{
     config::AcmeDnsRegisterConfig, ensure_root_dir, errors::CliError,
-    tls::dns::register_acme_dns_account,
+    tls::dns::register_acme_dns_account, util::write_files::create_private_dir_all_0700_sync,
 };
+use anyhow::Context;
 
 pub fn acme_dns_register<W1: Write, W2: Write>(
     args: AcmeDnsRegisterConfig,
@@ -15,12 +16,9 @@ pub fn acme_dns_register<W1: Write, W2: Write>(
     // Where to store creds:
     let cache_dir = root_dir.join("tls-cache");
 
-    if let Err(e) = std::fs::create_dir_all(&cache_dir) {
-        return Err(CliError::RuntimeError(format!(
-            "Failed to create TLS cache dir {}: {e}",
-            cache_dir.display()
-        )));
-    }
+    create_private_dir_all_0700_sync(&cache_dir).context((|| {
+        format!("TLS cache dir invalid: {}", cache_dir.display())
+    })())?;
 
     // Build domain list from NET_HOST + TLS_SANS for CNAME hints
     let mut domains: Vec<String> = Vec::new();
@@ -42,10 +40,10 @@ pub fn acme_dns_register<W1: Write, W2: Write>(
     domains.retain(|d| seen.insert(d.clone()));
 
     // Build allow_from
-    let allowfrom_opt = if args.allowfrom.is_empty() {
+    let allow_from_opt = if args.allow_from.is_empty() {
         None
     } else {
-        Some(args.allowfrom.clone())
+        Some(args.allow_from.clone())
     };
 
     let rt = tokio::runtime::Runtime::new()
@@ -56,7 +54,7 @@ pub fn acme_dns_register<W1: Write, W2: Write>(
             &args.api_base,
             &cache_dir,
             &domains,
-            allowfrom_opt.as_deref(),
+            allow_from_opt.as_deref(),
         ))
         .map_err(|e| CliError::RuntimeError(e.to_string()))?;
 

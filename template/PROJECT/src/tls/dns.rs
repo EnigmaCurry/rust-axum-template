@@ -12,6 +12,9 @@ use instant_acme::{
     NewAccount, NewOrder, OrderStatus, RetryPolicy,
 };
 use serde_json;
+use tracing::warn;
+
+use crate::util::write_files::create_private_dir_all_0700;
 
 /// Abstraction over “something that can set TXT records for ACME DNS-01”.
 ///
@@ -374,7 +377,6 @@ async fn create_or_load_account(
 
     // instant-acme expects `&[&str]` here.
     let contact_refs: Vec<&str> = contact_strings.iter().map(|s| s.as_str()).collect();
-
     let new_account = NewAccount {
         contact: &contact_refs,
         terms_of_service_agreed: true,
@@ -394,12 +396,14 @@ async fn create_or_load_account(
     let json = serde_json::to_vec_pretty(&creds)
         .context("failed to serialize ACME account credentials to JSON")?;
 
-    fs::create_dir_all(cache_dir).await.with_context(|| {
-        format!(
-            "failed to create ACME cache dir {} for account credentials",
-            cache_dir.display()
-        )
-    })?;
+    create_private_dir_all_0700(cache_dir)
+        .await
+        .with_context(|| {
+            format!(
+                "failed to create ACME cache dir {} for account credentials",
+                cache_dir.display()
+            )
+        })?;
 
     fs::write(&cred_path, &json).await.with_context(|| {
         format!(
@@ -422,7 +426,7 @@ pub async fn register_acme_dns_account(
     allow_from: Option<&[String]>,
 ) -> Result<(Credentials, bool)> {
     // Ensure cache dir exists
-    tokio::fs::create_dir_all(cache_dir)
+    create_private_dir_all_0700(cache_dir)
         .await
         .with_context(|| format!("failed to create tls cache dir '{}'", cache_dir.display()))?;
 
