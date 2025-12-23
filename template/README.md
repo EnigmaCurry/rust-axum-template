@@ -230,7 +230,7 @@ Here is the same ACME-DNS example as before, except instead of the
 `serve` command, it is using the `config` command:
 
 ```
-${APP} command -v \
+${APP} config -v \
   --net-host               ${APP}.example.org \
   --net-listen-ip          0.0.0.0 \
   --net-listen-port        8443 \
