@@ -22,7 +22,6 @@ TEMPLATE_URL="git@github.com:EnigmaCurry/rust-axum-template.git"
 TEMPLATE_REPO="$(realpath ../rust-axum-template)"
 PROJECT_SRC_DIR="${PROJECT_DIR}/${DEV_APP_NAME}/src"
 TEMPLATE_SRC_DIR="${TEMPLATE_REPO}/template/PROJECT/src"
-TEMPLATE_FRONTEND_DIR="${TEMPLATE_REPO}/template/frontend"
 if [[ ! -d "${TEMPLATE_REPO}" ]]; then
     fault "Could not find template repo"
 fi
@@ -34,9 +33,6 @@ if [[ ! -d "${PROJECT_SRC_DIR}" ]]; then
 fi
 if [[ ! -d "${TEMPLATE_SRC_DIR}" ]]; then
     fault "Could not find template src dir: ${TEMPLATE_SRC_DIR}"
-fi
-if [[ ! -d "${TEMPLATE_FRONTEND_DIR}" ]]; then
-    fault "Could not find template frontend dir: ${TEMPLATE_FRONTEND_DIR}"
 fi
 
 check_git_clean "${PROJECT_DIR}"
@@ -56,8 +52,6 @@ cp -a "${PROJECT_SRC_DIR}" "${TEMPLATE_SRC_DIR}"
 rm -rf "${TEMPLATE_REPO}/_scripts"
 cp -a "${PROJECT_DIR}/_scripts" "${TEMPLATE_REPO}/_scripts"
 rm -rf "${TEMPLATE_REPO}/template/.github/workflows"/*
-rm -rf "${TEMPLATE_REPO}/template/frontend"
-cp -a "${PROJECT_DIR}/frontend" "${TEMPLATE_REPO}/template/frontend"
 
 sed_escape() {
     # Escape / and & (the two characters that break a basic s/// command)
