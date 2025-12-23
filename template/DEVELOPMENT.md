@@ -121,20 +121,37 @@ just clippy --fix
 ## Reverse template
 
 If you are developing in a repository that is an instance of this
-template, and you want to merge your changes back into the template:
+template, and you want to merge your changes back upstream:
 
  * Make sure you have cloned rust-axum-template as a sibling
-   repository in the same parent directory that your project is
-   contained.
- * Make sure both repositories have a clean git status.
+   repository of the current project (i.e., `../rust-axum-template`).
+ * Make sure both this and the other repository has a clean git status
+   (the script will check for this).
 
 ```
 just merge-template-upstream
 ```
 
-This will merge all the changes from the project directory into the
-template directory, reverse the project name back into the template
-var `${APP}` and git stage all the changes, ready to be commited.
+This will copy all the changes from the current project directory into
+the template directory (`../rust-axum-template/template`),
+automatically reversing the project name (e.g., `axum-foo`) back into
+the original template var `${APP}` in the same files that the
+template's setup.sh modified via `envsubst`. Finally it will git stage
+all the changes, ready to be commited to the rust-axum-template
+repository.
+
+## Test new template branch
+
+If you want to test the new template changes, without needing to
+create a new repository, you may re-instantiate the template into a
+new orphan branch of the same repository:
+
+```
+just new-template-branch
+```
+
+It will ask you for the name of the new branch, which will be copied
+from the local `../rust-axum-template` repository.
 
 ## Release (Github actions)
 
