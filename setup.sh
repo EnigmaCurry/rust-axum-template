@@ -6,7 +6,7 @@ ROOT_DIR="$(realpath $(dirname "${BASH_SOURCE[0]}"))"
 TEMPLATE_DIR="$ROOT_DIR/template"
 
 cd ${ROOT_DIR}
-source template/_scripts/funcs.sh
+source _scripts/funcs.sh
 debug_var ROOT_DIR
 
 check_deps cargo just pnpm envsubst sed
