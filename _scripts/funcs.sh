@@ -259,7 +259,7 @@ check_git_clean() {
 }
 
 fresh_template_branch() {
-    set -euo pipefail
+    set -euox pipefail
     export TMP_REMOTE="tmp-import-remote"
 
     # -----------------------------------------------------------------
@@ -295,7 +295,7 @@ fresh_template_branch() {
     # -----------------------------------------------------------------
     exe git checkout --orphan "${NEW_ORPHAN_BRANCH}"
     exe git rm -rf .
-    exe git clean -fdx
+    exe git clean -fdx >/dev/null
 
     # -----------------------------------------------------------------
     # Make sure the temporary remote is gone, then add it again
