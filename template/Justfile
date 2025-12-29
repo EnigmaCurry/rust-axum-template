@@ -27,8 +27,8 @@ NPM           := env_var_or_default("NPM", "pnpm")
 DOCKER        := env_var_or_default("DOCKER", "docker")
 DOCKER_IMAGE  := env_var_or_default("DOCKER_IMAGE", "rust-axum-template")
 DOCKER_VOLUME := env_var_or_default("DOCKER_VOLUME", "rust-axum-template")
-ROOT_DIR      := env_var_or_default("ROOT_DIR", HOME / ".local" / "share" / APP)
-DATABASE_PATH := ROOT_DIR / "data.db"
+DATA_DIR      := env_var_or_default("DATA_DIR", HOME / ".local" / "share" / APP)
+DATABASE_PATH := env_var_or_default("DATABASE_PATH", DATA_DIR / "data.db")
 
 # print help for Just targets
 help:
@@ -308,6 +308,7 @@ serve-docker-plain: _env_check build-docker
 # Apply database migrations in local database
 migrate: _env_check
     cd {{PROJECT_DIR}} && \
+    export DATABASE_URL="sqlite://{{DATABASE_PATH}}" && \
     sqlx database create && \
     sqlx migrate run
 
@@ -320,7 +321,7 @@ sql-docker:
     ${DOCKER} exec -it {{APP}} sqlite3 /data/data.db
 
 destroy:
-    rm -f {{PROJECT_DIR}}/{{DATABASE_PATH}}
+    rm -f {{DATABASE_PATH}}
 
 destroy-docker:
     docker rm -fv {{APP}}

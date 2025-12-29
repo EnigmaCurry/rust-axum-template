@@ -4,6 +4,8 @@
 <!-- )](https://crates.io/crates/${APP}) -->
 [![Coverage](https://img.shields.io/badge/Coverage-Report-purple)](https://${GIT_USERNAME}.github.io/${APP}/coverage/master/)
 
+This is ALPHA software in-development.
+
 ## Features
 
  * Single binary deployment.
@@ -28,7 +30,7 @@
  * Multiple user authentication backends:
    * Username / Password.
    * Forward Auth via trusted header (Traefik Proxy or compatible proxy layer).
-   * Todo: OAuth (OIDC).
+   * OAuth (OIDC).
  * Admin web interface.
  * [Just](https://github.com/casey/just) enabled project build
    targets.

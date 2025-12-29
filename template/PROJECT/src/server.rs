@@ -1,24 +1,22 @@
 use crate::{
     middleware::{
-        trusted_forwarded_for::TrustedForwardedForConfig, trusted_header_auth::ForwardAuthConfig,
+        oidc::{OidcConfig, build_oidc_auth_layer},
+        trusted_forwarded_for::TrustedForwardedForConfig,
+        trusted_header_auth::ForwardAuthConfig,
     },
     prelude::*,
     routes::router,
     tls::{
         dns::{AcmeDnsProvider, obtain_certificate_with_dns01},
         generate::{
-            ensure_rustls_crypto_provider, load_or_generate_self_signed,
-            renew_self_signed_loop,
+            ensure_rustls_crypto_provider, load_or_generate_self_signed, renew_self_signed_loop,
         },
-        self_signed_cache::{
-            delete_cached_pair, read_private_tls_file, read_tls_file,
-        },
+        self_signed_cache::{delete_cached_pair, read_private_tls_file, read_tls_file},
     },
-    util::write_files::{
-        atomic_write_file_0600, create_private_dir_all_0700,
-    },
+    util::write_files::{atomic_write_file_0600, create_private_dir_all_0700},
 };
 use anyhow::Context;
+use axum::http::Uri;
 use axum_server::{Handle, tls_rustls::RustlsConfig};
 use futures_util::StreamExt;
 use rustls::ServerConfig as RustlsServerConfig;
@@ -31,6 +29,7 @@ use tower_sessions::{
     session_store::ExpiredDeletion,
 };
 use tower_sessions_sqlx_store::SqliteStore;
+use tracing::warn;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -81,8 +80,9 @@ pub enum TlsConfig {
 /// Run the HTTP server until shutdown.
 pub async fn run(
     addr: SocketAddr,
-    user_cfg: ForwardAuthConfig,
-    fwd_cfg: TrustedForwardedForConfig,
+    forward_auth_cfg: ForwardAuthConfig,
+    forward_for_cfg: TrustedForwardedForConfig,
+    oidc_cfg: OidcConfig,
     db_url: String,
     session_secure: bool,
     session_expiry_secs: u64,
@@ -104,9 +104,19 @@ pub async fn run(
     .await?;
     let deletion_abort = deletion_task.abort_handle();
 
+    let oidc_auth_layer = build_oidc_auth_layer(&oidc_cfg).await?;
+    debug_assert!(!oidc_cfg.enabled || oidc_auth_layer.is_some());
+
     // Shared state + router
     let state = AppState { db };
-    let app = build_app(user_cfg, fwd_cfg, state, session_layer);
+    let app = build_app(
+        forward_auth_cfg,
+        forward_for_cfg,
+        oidc_cfg,
+        oidc_auth_layer,
+        state,
+        session_layer,
+    );
 
     ensure_rustls_crypto_provider();
 
@@ -198,7 +208,7 @@ fn log_startup(db_url: &str) -> anyhow::Result<()> {
 
 async fn init_db(db_url: &str) -> anyhow::Result<SqlitePool> {
     use std::str::FromStr;
-
+    warn!("foo");
     let connect_opts = SqliteConnectOptions::from_str(db_url)?
         .create_if_missing(true)
         .foreign_keys(true)
@@ -254,14 +264,23 @@ fn start_session_deletion_task(
 }
 
 fn build_app(
-    user_cfg: ForwardAuthConfig,
-    fwd_cfg: TrustedForwardedForConfig,
+    forward_auth_cfg: ForwardAuthConfig,
+    forward_for_cfg: TrustedForwardedForConfig,
+    oidc_cfg: OidcConfig,
+    oidc_auth_layer: Option<axum_oidc::OidcAuthLayer<axum_oidc::EmptyAdditionalClaims>>,
     state: AppState,
     session_layer: SessionManagerLayer<SqliteStore>,
 ) -> axum::Router {
-    router(user_cfg, fwd_cfg, state.clone())
-        .layer(session_layer)
-        .with_state(state)
+    router(
+        forward_auth_cfg,
+        forward_for_cfg,
+        oidc_cfg,
+        oidc_auth_layer,
+        state.clone(),
+    )
+    .layer(session_layer)
+    .with_state(state)
+    .into()
 }
 
 async fn serve_http(

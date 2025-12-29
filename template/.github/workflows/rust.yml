@@ -12,6 +12,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   PROJECT_DIR: ${APP}
+  DATABASE_PATH: /home/runner/work/${APP}.db
 
 jobs:
   build:

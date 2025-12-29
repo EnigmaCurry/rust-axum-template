@@ -1,18 +1,20 @@
 use std::{
     net::{IpAddr, SocketAddr},
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use crate::{
     config::{AppConfig, TlsAcmeChallenge, TlsMode, database::build_db_url},
     ensure_root_dir,
     errors::CliError,
-    middleware::{self, auth::AuthenticationMethod},
+    middleware::{self, auth::AuthenticationMethod, oidc::build_oidc_auth_layer},
     server,
     util::write_files::create_private_dir_all_0700_sync,
 };
 use anyhow::Context;
-use axum::http::HeaderName;
+use axum::http::{HeaderName, Uri};
+use axum_oidc::{EmptyAdditionalClaims, OidcAuthLayer};
 use tracing::{debug, error, info};
 
 static TLS_CACHE_DIR: &str = "tls-cache";
@@ -21,8 +23,9 @@ pub struct ServePlan {
     pub addr: SocketAddr,
     pub tls_config: server::TlsConfig,
     pub db_url: String,
-    pub auth_cfg: middleware::trusted_header_auth::ForwardAuthConfig,
-    pub fwd_cfg: middleware::trusted_forwarded_for::TrustedForwardedForConfig,
+    pub forward_auth_cfg: middleware::trusted_header_auth::ForwardAuthConfig,
+    pub forward_for_cfg: middleware::trusted_forwarded_for::TrustedForwardedForConfig,
+    pub oidc_cfg: middleware::oidc::OidcConfig,
     pub session_secure: bool,
     pub session_expiry_secs: u64,
     pub session_check_secs: u64,
@@ -32,14 +35,15 @@ fn plan_serve(cfg: &AppConfig, root_dir: &Path) -> Result<ServePlan, CliError> {
     let addr = parse_listen_addr(cfg)?;
     let tls_config = build_tls_config(cfg, root_dir)?;
     let db_url = build_db_url(cfg.database.url.clone(), root_dir);
-    let (auth_cfg, fwd_cfg) = build_auth_cfgs(cfg)?;
+    let (forward_auth_cfg, forward_for_cfg, oidc_cfg) = build_auth_cfgs(cfg)?;
 
     Ok(ServePlan {
         addr,
         tls_config,
         db_url,
-        auth_cfg,
-        fwd_cfg,
+        forward_auth_cfg,
+        forward_for_cfg,
+        oidc_cfg,
         session_secure: true,
         session_expiry_secs: cfg.session.expiry_seconds,
         session_check_secs: cfg.session.check_seconds,
@@ -49,7 +53,7 @@ fn plan_serve(cfg: &AppConfig, root_dir: &Path) -> Result<ServePlan, CliError> {
 pub fn serve(cfg: AppConfig, root_dir: PathBuf) -> Result<(), CliError> {
     let root_dir = ensure_root_dir(root_dir)?;
 
-    let plan = plan_serve(&cfg, &root_dir)?;
+    let plan = plan_serve(&cfg, &root_dir).expect("plan");
 
     debug!(?cfg, "serve(): parsed cfg");
     info!("Server will listen on {}", plan.addr);
@@ -62,8 +66,9 @@ pub fn serve(cfg: AppConfig, root_dir: PathBuf) -> Result<(), CliError> {
     let rt = create_runtime()?;
     rt.block_on(server::run(
         plan.addr,
-        plan.auth_cfg,
-        plan.fwd_cfg,
+        plan.forward_auth_cfg,
+        plan.forward_for_cfg,
+        plan.oidc_cfg,
         plan.db_url,
         plan.session_secure,
         plan.session_expiry_secs,
@@ -142,7 +147,8 @@ fn build_tls_config(cfg: &AppConfig, root_dir: &Path) -> Result<server::TlsConfi
 
         TlsMode::Acme => {
             let cache_dir: PathBuf = root_dir.join(TLS_CACHE_DIR);
-            create_private_dir_all_0700_sync(&cache_dir).context(format!("TLS cache dir invalid: {}", cache_dir.display()))?;
+            create_private_dir_all_0700_sync(&cache_dir)
+                .context(format!("TLS cache dir invalid: {}", cache_dir.display()))?;
 
             let domains = build_acme_domains(cfg)?;
             let directory_url = cfg.tls.acme_directory_url.clone();
@@ -232,6 +238,7 @@ fn build_auth_cfgs(
     (
         middleware::trusted_header_auth::ForwardAuthConfig,
         middleware::trusted_forwarded_for::TrustedForwardedForConfig,
+        middleware::oidc::OidcConfig,
     ),
     CliError,
 > {
@@ -242,7 +249,7 @@ fn build_auth_cfgs(
 
     let trusted_proxy: Option<IpAddr> = cfg.auth.trusted_proxy;
 
-    let auth_cfg = middleware::trusted_header_auth::ForwardAuthConfig {
+    let forward_auth_cfg = middleware::trusted_header_auth::ForwardAuthConfig {
         method: auth_method,
         trusted_header_name,
         trusted_proxy,
@@ -262,13 +269,16 @@ fn build_auth_cfgs(
         AuthenticationMethod::UsernamePassword => {
             info!("Authentication method: username_password");
         }
+        AuthenticationMethod::Oidc => {
+            info!("Authentication method: oidc");
+        }
     }
 
     let fwd_enabled = cfg.auth.trusted_forwarded_for;
     let fwd_header_str = cfg.auth.trusted_forwarded_for_name.as_str();
     let fwd_header_name = parse_header_name(fwd_header_str, "forwarded-for header")?;
 
-    let fwd_cfg = middleware::trusted_forwarded_for::TrustedForwardedForConfig {
+    let forward_for_cfg = middleware::trusted_forwarded_for::TrustedForwardedForConfig {
         enabled: fwd_enabled,
         header_name: fwd_header_name,
         trusted_proxy,
@@ -278,7 +288,15 @@ fn build_auth_cfgs(
         info!("Trusted FORWARDED-FOR enabled: header='{fwd_header_str}', trusted_proxy={t}");
     }
 
-    Ok((auth_cfg, fwd_cfg))
+    let oidc_cfg = middleware::oidc::OidcConfig {
+        enabled: cfg.auth.method == AuthenticationMethod::Oidc,
+        host_port: build_host_port(&cfg.network.host, cfg.network.listen_port),
+        issuer: cfg.auth.oidc_issuer.clone(),
+        client_id: cfg.auth.oidc_client_id.clone(),
+        client_secret: cfg.auth.oidc_client_secret.clone(),
+    };
+
+    Ok((forward_auth_cfg, forward_for_cfg, oidc_cfg))
 }
 
 fn parse_header_name(name: &str, label: &str) -> Result<HeaderName, CliError> {
@@ -291,6 +309,68 @@ fn create_runtime() -> Result<tokio::runtime::Runtime, CliError> {
         error!("Failed to create Tokio runtime: {e}");
         CliError::RuntimeError(format!("Failed to start Tokio runtime: {e}"))
     })
+}
+
+fn strip_scheme_and_path(mut s: &str) -> &str {
+    // If it looks like a URL, drop scheme://
+    if let Some(rest) = s.strip_prefix("http://") {
+        s = rest;
+    } else if let Some(rest) = s.strip_prefix("https://") {
+        s = rest;
+    }
+
+    // Drop any path/query/fragment
+    if let Some(i) = s.find(['/', '?', '#']) {
+        s = &s[..i];
+    }
+
+    s
+}
+
+fn build_host_port(host: &Option<String>, port: u16) -> Option<String> {
+    let raw = host.as_deref().unwrap_or("localhost");
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Some(format!("localhost:{port}"));
+    }
+
+    // Normalize to "authority-ish" (no scheme, no path)
+    let authority = strip_scheme_and_path(raw);
+
+    // If already bracketed IPv6 like "[::1]" or "[::1]:1234"
+    if authority.starts_with('[') {
+        // If it already has a port ("]:<digits>"), keep host part and override port.
+        // Find closing bracket
+        if let Some(end) = authority.find(']') {
+            let host_part = &authority[..=end]; // includes closing ]
+            return Some(format!("{host_part}:{port}"));
+        }
+        // Malformed bracket, fall back
+        return Some(format!("localhost:{port}"));
+    }
+
+    // If it contains ':' now, it might be:
+    // - IPv6 literal like "::1"  (needs brackets)
+    // - host:port like "localhost:3000" (NOT IPv6)
+    //
+    // Heuristic:
+    // - If it has 2+ colons, it's IPv6 -> bracket it.
+    // - If it has exactly 1 colon, assume host:port -> take host part and override port.
+    let colon_count = authority.matches(':').count();
+
+    if colon_count >= 2 {
+        // IPv6 literal
+        return Some(format!("[{authority}]:{port}"));
+    }
+
+    if colon_count == 1 {
+        // Probably "host:port" (domain names do not legally contain ':')
+        let host_only = authority.split(':').next().unwrap_or(authority);
+        return Some(format!("{host_only}:{port}"));
+    }
+
+    // Plain hostname / IPv4
+    Some(format!("{authority}:{port}"))
 }
 
 #[test]
