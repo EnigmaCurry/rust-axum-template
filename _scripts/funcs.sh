@@ -259,7 +259,7 @@ check_git_clean() {
 }
 
 fresh_template_branch() {
-    set -euox pipefail
+    set -euo pipefail
     export TMP_REMOTE="tmp-import-remote"
 
     # -----------------------------------------------------------------
