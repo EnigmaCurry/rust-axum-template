@@ -7,11 +7,12 @@ CREATE TABLE identity_provider (
     -- you can add is_default INTEGER DEFAULT 0 CHECK (is_default IN (0,1)) if you like
 );
 
-INSERT INTO identity_provider (name, display_name)
+-- match ids from enum models::identity_provider::IdentityProviders
+INSERT INTO identity_provider (id, name, display_name)
 VALUES
-    ('system','System User'),
-    ('traefik-forwardauth', 'Traefik ForwardAuth');
-
+    (1, 'System','System User'),
+    (2, 'ForwardAuth', 'Traefik ForwardAuth'),
+    (3, 'Oidc', 'OpenID Connect');
 
 -- signup methods
 
@@ -29,11 +30,10 @@ INSERT INTO signup_method (code, description) VALUES
 -- users
 
 CREATE TABLE [user] (
-    id                   TEXT PRIMARY KEY,
+    id                   INTEGER PRIMARY KEY,
     identity_provider_id INTEGER NOT NULL REFERENCES identity_provider(id),
     external_id          TEXT NOT NULL,   -- value from ForwardAuth (e.g. subject or email)
 
-    email                TEXT NOT NULL,   -- email as given by ForwardAuth
     username             TEXT,            -- user-chosen username; see CHECK below
 
     is_registered        INTEGER NOT NULL DEFAULT 0
@@ -53,15 +53,14 @@ CREATE TABLE [user] (
         (is_registered = 1 AND username IS NOT NULL)
     ),
 
-    UNIQUE(identity_provider_id, external_id),
-    UNIQUE(identity_provider_id, email),
+    UNIQUE(external_id),
     UNIQUE(username)
 );
 
 -- passwords
 
 CREATE TABLE user_password (
-    user_id       TEXT NOT NULL
+    user_id       INTEGER NOT NULL
                   PRIMARY KEY
                   REFERENCES [user](id)
                   ON DELETE CASCADE,
@@ -98,7 +97,7 @@ INSERT INTO [role] (name, description) VALUES
 -- IMPORTANT: user_id and assigned_by must match the type of user.id
 
 CREATE TABLE user_role (
-    user_id         TEXT NOT NULL REFERENCES [user](id) ON DELETE CASCADE,
+    user_id         INTEGER NOT NULL REFERENCES [user](id) ON DELETE CASCADE,
     role_id         INTEGER NOT NULL REFERENCES [role](id),
     assigned_at     DATETIME NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     assigned_by     TEXT REFERENCES [user](id), -- which admin gave them this role

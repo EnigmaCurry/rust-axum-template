@@ -2,24 +2,18 @@
   import { onMount } from "svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import * as Card from "$lib/components/ui/card/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
-  import {
-    FieldGroup,
-    Field,
-    FieldLabel,
-  } from "$lib/components/ui/field/index.js";
 
   const {
     id,
     whoami = "/api/whoami",
+    // IMPORTANT: this must be a GET endpoint that returns a 3xx redirect to the IdP
     loginAction = "/api/login",
     logoutAction = "/api/logout",
+    // optional: caller can override the return path
+    next = null,
   } = $props();
 
-  // --- reactive state (Svelte 5 runes) ---
-  let username = $state("");
-  let password = $state("");
-
+  let externalUserId = $state("");
   let csrfToken = $state("");
   let isLoggedIn = $state(false);
   let loading = $state(false);
@@ -28,7 +22,8 @@
   function applyWhoami(json) {
     const session = json?.data?.session;
     csrfToken = typeof session?.csrf_token === "string" ? session.csrf_token : "";
-    username = session.username;
+    externalUserId =
+      typeof session?.external_user_id === "string" ? session.external_user_id : "";
     isLoggedIn = !!session?.is_logged_in;
   }
 
@@ -47,6 +42,14 @@
     return !!csrfToken;
   }
 
+  function computeNext() {
+    if (typeof next === "string" && next.length > 0) return next;
+    if (typeof window !== "undefined") {
+      return window.location.pathname + window.location.search + window.location.hash;
+    }
+    return "/";
+  }
+
   async function postJson(url, bodyObj) {
     return fetch(url, {
       method: "POST",
@@ -57,46 +60,6 @@
       },
       body: bodyObj ? JSON.stringify(bodyObj) : "{}",
     });
-  }
-
-  async function submitLogin(event) {
-    event.preventDefault();
-    loading = true;
-    errorMsg = "";
-
-    if (!(await ensureCsrf())) {
-      loading = false;
-      errorMsg = "Could not retrieve CSRF token. Please refresh and try again.";
-      return;
-    }
-
-    // try login
-    let res = await postJson(loginAction, { username, password });
-    let json = await res.json().catch(() => null);
-
-    // if csrf rotated/expired, refresh token once and retry
-    if (
-      res.status === 401 &&
-      (json?.error?.code === "csrf_invalid" || json?.error?.code === "csrf_missing")
-    ) {
-      await fetchWhoami();
-      res = await postJson(loginAction, { username, password });
-      json = await res.json().catch(() => null);
-    }
-
-    if (!res.ok || json?.error) {
-      errorMsg =
-        json?.error?.message ??
-        json?.error ??
-        `Login failed (HTTP ${res.status})`;
-      loading = false;
-      return;
-    }
-
-    // refresh session state
-    await fetchWhoami();
-    password = "";
-    loading = false;
   }
 
   async function submitLogout() {
@@ -141,11 +104,11 @@
     {#if isLoggedIn}
       <Card.Title class="text-2xl">You’re signed in</Card.Title>
       <Card.Description>
-        Signed in as <span class="font-mono">{username ?? "(unknown)"}</span>
+        Signed in as <span class="font-mono">{externalUserId || "(unknown)"}</span>
       </Card.Description>
     {:else}
       <Card.Title class="text-2xl">Sign in</Card.Title>
-      <Card.Description>Enter your account credentials:</Card.Description>
+      <Card.Description>Continue with your identity provider:</Card.Description>
     {/if}
   </Card.Header>
 
@@ -159,37 +122,12 @@
         {loading ? "Signing out…" : "Logout"}
       </Button>
     {:else}
-      <form onsubmit={submitLogin}>
-        <FieldGroup>
-          <Field>
-            <FieldLabel for={"username-" + id}>Username</FieldLabel>
-            <Input
-              id={"username-" + id}
-              type="username"
-              placeholder="username"
-              autocomplete="username"
-              required
-              bind:value={username}
-            />
-          </Field>
-
-          <Field>
-            <FieldLabel for={"password-" + id}>Password</FieldLabel>
-            <Input
-              id={"password-" + id}
-              type="password"
-              autocomplete="current-password"
-              required
-              bind:value={password}
-            />
-          </Field>
-
-          <Field>
-            <Button type="submit" class="w-full" disabled={loading}>
-              {loading ? "Logging in…" : "Login"}
-            </Button>
-          </Field>
-        </FieldGroup>
+      <!-- REAL navigation. No fetch. -->
+      <form method="GET" action={loginAction}>
+        <input type="hidden" name="next" value={computeNext()} />
+        <Button type="submit" class="w-full">
+          Sign in with OIDC
+        </Button>
       </form>
     {/if}
   </Card.Content>
