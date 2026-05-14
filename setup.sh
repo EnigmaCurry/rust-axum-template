@@ -78,7 +78,7 @@ done < <(find "$TEMPLATE_DIR" -type f -print0)
 echo "Template render complete!"
 rm -rf template setup.sh
 
-just deps config build
+just deps build
 just test
 
 git add .
