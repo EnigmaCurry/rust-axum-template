@@ -36,6 +36,7 @@ use tracing::warn;
 pub struct AppState {
     pub db: SqlitePool,
     pub auth_config: AuthConfig,
+    pub shutdown_tx: tokio::sync::broadcast::Sender<()>,
 }
 
 #[derive(Clone, Debug)]
@@ -110,8 +111,15 @@ pub async fn run(
     let oidc_auth_layer = build_oidc_auth_layer(&oidc_cfg).await?;
     debug_assert!(!oidc_cfg.enabled || oidc_auth_layer.is_some());
 
+    // Shutdown broadcast channel — SSE clients receive "shutdown" before the server stops
+    let (shutdown_tx, _) = tokio::sync::broadcast::channel::<()>(1);
+
     // Shared state + router
-    let state = AppState { db, auth_config };
+    let state = AppState {
+        db,
+        auth_config,
+        shutdown_tx: shutdown_tx.clone(),
+    };
     let app = build_app(
         forward_auth_cfg,
         forward_for_cfg,
@@ -125,12 +133,12 @@ pub async fn run(
 
     // Serve based on TLS mode
     match tls_config {
-        TlsConfig::Http => serve_http(addr, app, deletion_abort).await?,
+        TlsConfig::Http => serve_http(addr, app, deletion_abort, shutdown_tx).await?,
 
         TlsConfig::RustlsFiles {
             cert_path,
             key_path,
-        } => serve_rustls_files(addr, app, deletion_abort, cert_path, key_path).await?,
+        } => serve_rustls_files(addr, app, deletion_abort, shutdown_tx, cert_path, key_path).await?,
 
         TlsConfig::SelfSigned {
             cache_dir,
@@ -145,6 +153,7 @@ pub async fn run(
                 addr,
                 app,
                 deletion_abort,
+                shutdown_tx,
                 cache_dir,
                 sans,
                 leaf_valid_secs,
@@ -163,6 +172,7 @@ pub async fn run(
                 addr,
                 app,
                 deletion_abort,
+                shutdown_tx,
                 directory_url,
                 cache_dir,
                 domains,
@@ -182,6 +192,7 @@ pub async fn run(
                 addr,
                 app,
                 deletion_abort,
+                shutdown_tx,
                 directory_url,
                 cache_dir,
                 domains,
@@ -290,6 +301,7 @@ async fn serve_http(
     addr: SocketAddr,
     app: axum::Router,
     deletion_abort: tokio::task::AbortHandle,
+    shutdown_tx: tokio::sync::broadcast::Sender<()>,
 ) -> anyhow::Result<()> {
     use std::io;
 
@@ -308,7 +320,7 @@ async fn serve_http(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
-    .with_graceful_shutdown(shutdown_signal(deletion_abort, None))
+    .with_graceful_shutdown(shutdown_signal(deletion_abort, None, shutdown_tx))
     .await?;
 
     Ok(())
@@ -318,6 +330,7 @@ async fn serve_rustls_files(
     addr: SocketAddr,
     app: axum::Router,
     deletion_abort: tokio::task::AbortHandle,
+    shutdown_tx: tokio::sync::broadcast::Sender<()>,
     cert_path: PathBuf,
     key_path: PathBuf,
 ) -> anyhow::Result<()> {
@@ -335,7 +348,7 @@ async fn serve_rustls_files(
 
     info!("listening on https://{addr}");
 
-    serve_with_handle(addr, deletion_abort, |handle| {
+    serve_with_handle(addr, deletion_abort, shutdown_tx, |handle| {
         axum_server::bind_rustls(addr, rustls_config)
             .handle(handle)
             .serve(app.into_make_service_with_connect_info::<SocketAddr>())
@@ -347,6 +360,7 @@ async fn serve_acme_tls_alpn01(
     addr: SocketAddr,
     app: axum::Router,
     deletion_abort: tokio::task::AbortHandle,
+    shutdown_tx: tokio::sync::broadcast::Sender<()>,
     directory_url: String,
     cache_dir: PathBuf,
     domains: Vec<String>,
@@ -397,7 +411,7 @@ async fn serve_acme_tls_alpn01(
 
     info!("listening on https://{addr} (ACME)");
 
-    serve_with_handle(addr, deletion_abort, |handle| {
+    serve_with_handle(addr, deletion_abort, shutdown_tx, |handle| {
         axum_server::bind(addr)
             .handle(handle)
             .acceptor(acceptor)
@@ -410,6 +424,7 @@ async fn serve_acme_dns01(
     addr: SocketAddr,
     app: axum::Router,
     deletion_abort: tokio::task::AbortHandle,
+    shutdown_tx: tokio::sync::broadcast::Sender<()>,
     directory_url: String,
     cache_dir: PathBuf,
     domains: Vec<String>,
@@ -441,7 +456,7 @@ async fn serve_acme_dns01(
 
     info!("listening on https://{addr} (ACME dns-01)");
 
-    serve_with_handle(addr, deletion_abort, |handle| {
+    serve_with_handle(addr, deletion_abort, shutdown_tx, |handle| {
         axum_server::bind_rustls(addr, rustls_config)
             .handle(handle)
             .serve(app.into_make_service_with_connect_info::<SocketAddr>())
@@ -453,6 +468,7 @@ async fn serve_acme_dns01(
 async fn serve_with_handle<E, Fut, Mk>(
     addr: SocketAddr,
     deletion_abort: tokio::task::AbortHandle,
+    shutdown_tx: tokio::sync::broadcast::Sender<()>,
     mk_server: Mk,
 ) -> anyhow::Result<()>
 where
@@ -466,7 +482,7 @@ where
     // Spawn the shutdown handler that will:
     //  - abort the deletion task
     //  - call handle.graceful_shutdown(...)
-    let shutdown_task = tokio::spawn(shutdown_signal(deletion_abort, Some(handle.clone())));
+    let shutdown_task = tokio::spawn(shutdown_signal(deletion_abort, Some(handle.clone()), shutdown_tx));
 
     let server = mk_server(handle.clone());
 
@@ -488,6 +504,7 @@ async fn serve_self_signed(
     addr: SocketAddr,
     app: axum::Router,
     deletion_abort: tokio::task::AbortHandle,
+    shutdown_tx: tokio::sync::broadcast::Sender<()>,
     cache_dir: Option<PathBuf>,
     sans: Vec<String>,
     leaf_valid_secs: u32,
@@ -531,7 +548,7 @@ async fn serve_self_signed(
 
     info!("listening on https://{addr} (self-signed)");
 
-    serve_with_handle(addr, deletion_abort, |handle| {
+    serve_with_handle(addr, deletion_abort, shutdown_tx, |handle| {
         axum_server::bind_rustls(addr, rustls_config)
             .handle(handle)
             .serve(app.into_make_service_with_connect_info::<SocketAddr>())
@@ -657,7 +674,11 @@ fn pem_cert_is_valid_now(pem_bytes: &[u8]) -> anyhow::Result<bool> {
 }
 
 /// Shutdown signal for graceful shutdown on Ctrl+C / SIGTERM.
-async fn shutdown_signal(deletion_task_abort_handle: AbortHandle, handle: Option<Handle>) {
+async fn shutdown_signal(
+    deletion_task_abort_handle: AbortHandle,
+    handle: Option<Handle>,
+    shutdown_tx: tokio::sync::broadcast::Sender<()>,
+) {
     let ctrl_c = async {
         tokio::signal::ctrl_c()
             .await
@@ -681,16 +702,29 @@ async fn shutdown_signal(deletion_task_abort_handle: AbortHandle, handle: Option
         _ = terminate => {},
     }
 
+    info!("shutdown signal received; starting graceful shutdown");
+
+    // Notify SSE clients that the server is going away
+    let _ = shutdown_tx.send(());
+
+    // Give SSE clients a moment to receive the shutdown event
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
     // Stop the background deletion task
     deletion_task_abort_handle.abort();
 
     // If we are running behind axum_server, trigger graceful shutdown there too
     if let Some(handle) = handle {
-        // You can tune the timeout; 10 seconds is a typical choice.
-        handle.graceful_shutdown(Some(Duration::from_secs(10)));
+        handle.graceful_shutdown(Some(Duration::from_secs(1)));
     }
 
-    info!("shutdown signal received; starting graceful shutdown");
+    // Force exit after deadline — axum's graceful shutdown waits indefinitely
+    // for open connections (e.g. SSE streams).
+    tokio::spawn(async {
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        info!("graceful shutdown deadline reached; forcing exit");
+        std::process::exit(0);
+    });
 }
 
 fn privileged_port_hint() -> &'static str {
