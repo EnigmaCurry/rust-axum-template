@@ -74,7 +74,15 @@ just release        # Tags and pushes, triggers GitHub Actions (builds binaries 
 
 ## Template System
 
-`setup.sh` instantiates the template by replacing `${APP}`, `${GIT_FORGE}`, `${GIT_USERNAME}` via `envsubst`. It supports non-interactive mode when all three env vars are pre-set. To merge changes back upstream to the template repo:
+`setup.sh` instantiates the template by replacing `${APP}`, `${GIT_FORGE}`, `${GIT_USERNAME}` via `envsubst`. Run it non-interactively by pre-setting all three env vars:
+
+```bash
+APP="my-app" GIT_FORGE="github.com" GIT_USERNAME="myuser" bash setup.sh
+```
+
+This will render the template, build the frontend, compile the binary, and run tests. After it completes, the `template/` directory and `setup.sh` are removed, leaving a ready-to-use project.
+
+To merge changes back upstream to the template repo:
 
 ```bash
 just merge-template-upstream  # Reverses variable substitution and stages changes in ../rust-axum-template
