@@ -11,22 +11,32 @@ debug_var ROOT_DIR
 
 check_deps cargo just pnpm envsubst sed
 
-echo
-ask_no_blank "Enter your git forge domain (e.g. forgejo.example.com or github.com)" GIT_FORGE "github.com"
+# Non-interactive mode: if APP, GIT_FORGE, and GIT_USERNAME are all set,
+# skip prompts and confirmation. Set NONINTERACTIVE=1 to also skip the
+# final confirmation automatically.
+if [[ -n "${APP:-}" && -n "${GIT_FORGE:-}" && -n "${GIT_USERNAME:-}" ]]; then
+    NONINTERACTIVE=1
+fi
 
-APP="$(basename "$ROOT_DIR")"
-APP="$(printf '%s' "$APP" | sed -E 's/[^[:alnum:]-]+/-/g')"
-echo
-ask_no_blank "Enter your application name (no spaces)" APP "${APP}"
+if [[ "${NONINTERACTIVE:-}" != "1" ]]; then
+    echo
+    ask_no_blank "Enter your git forge domain (e.g. forgejo.example.com or github.com)" GIT_FORGE "github.com"
 
-GIT_USERNAME="$(
-        git remote get-url origin 2>/dev/null |
-          sed -E 's/^(https:\/\/|git@github\.com:)([^\/]+).*$/\2/')"
-GIT_USERNAME="${GIT_USERNAME,,}"
-echo
-ask_no_blank "Enter your Git forge username or org name" GIT_USERNAME "${GIT_USERNAME}"
+    _DEFAULT_APP="$(basename "$ROOT_DIR")"
+    _DEFAULT_APP="$(printf '%s' "$_DEFAULT_APP" | sed -E 's/[^[:alnum:]-]+/-/g')"
+    echo
+    ask_no_blank "Enter your application name (no spaces)" APP "${APP:-${_DEFAULT_APP}}"
+
+    _DEFAULT_USERNAME="$(
+            git remote get-url origin 2>/dev/null |
+              sed -E 's/^(https:\/\/|git@github\.com:)([^\/]+).*$/\2/')"
+    _DEFAULT_USERNAME="${_DEFAULT_USERNAME,,}"
+    echo
+    ask_no_blank "Enter your Git forge username or org name" GIT_USERNAME "${GIT_USERNAME:-${_DEFAULT_USERNAME}}"
+fi
 
 export APP
+export GIT_FORGE="${GIT_FORGE:-github.com}"
 export GIT_USERNAME="${GIT_USERNAME,,}"
 export APP_PREFIX=${APP^^}
 APP_PREFIX="${APP_PREFIX//[ -]/_}"   # space/dash -> underscore
@@ -42,9 +52,11 @@ debug_var APP
 debug_var GIT_USERNAME
 debug_var GIT_REPOSITORY
 
-echo
-echo "Cargo will now download extra dependencies, build, and test your app."
-confirm yes "Do you want to proceed with the values shown above" "?"
+if [[ "${NONINTERACTIVE:-}" != "1" ]]; then
+    echo
+    echo "Cargo will now download extra dependencies, build, and test your app."
+    confirm yes "Do you want to proceed with the values shown above" "?"
+fi
 
 # Rename PROJECT directory to the same name as the app
 mv "${TEMPLATE_DIR}/PROJECT" "${TEMPLATE_DIR}/${APP}"
