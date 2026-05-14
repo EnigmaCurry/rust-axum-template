@@ -7,6 +7,7 @@ TEMPLATE_DIR="$ROOT_DIR/template"
 
 cd ${ROOT_DIR}
 source _scripts/funcs.sh
+[[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
 debug_var ROOT_DIR
 
 check_deps cargo just pnpm envsubst sed
