@@ -23,6 +23,7 @@ use crate::{
 pub mod admin;
 pub mod api;
 pub mod config;
+pub mod events;
 pub mod healthz;
 pub mod hello;
 pub mod login;
@@ -89,6 +90,7 @@ pub fn router(
             forwarded_for_cfg,
             trusted_forwarded_for::trusted_forwarded_for,
         ))
+        .route("/api/events", get(events::sse_handler))
         .route("/", get(crate::frontend::spa_handler))
         .route("/{*path}", get(crate::frontend::spa_handler))
         .layer(TraceLayer::new_for_http())
