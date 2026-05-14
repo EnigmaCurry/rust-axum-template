@@ -83,7 +83,7 @@ rm -rf template setup.sh
 git remote set-url origin "${GIT_REPOSITORY}.git"
 echo "Set git remote origin to ${GIT_REPOSITORY}.git"
 
-just deps build
+just ${DEPS_TARGET:-deps} build
 just test
 
 git add .
