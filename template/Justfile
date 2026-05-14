@@ -99,10 +99,10 @@ deps:
     @echo
     @echo "Installing dependencies:"
     @echo
-    cargo install --locked cargo-nextest
-    cargo install --locked git-cliff
-    cargo install --locked cargo-llvm-cov
-    cargo install --locked sqlx-cli --no-default-features --features sqlite
+    cargo binstall --no-confirm cargo-nextest
+    cargo binstall --no-confirm git-cliff
+    cargo binstall --no-confirm cargo-llvm-cov
+    cargo binstall --no-confirm sqlx-cli
     @echo
     @echo "All dependencies have been installed."
     @echo
@@ -115,6 +115,7 @@ bin-deps:
     cargo binstall --no-confirm cargo-nextest
     cargo binstall --no-confirm git-cliff
     cargo binstall --no-confirm cargo-llvm-cov
+    cargo binstall --no-confirm sqlx-cli
 
 # Build and run binary + args
 [no-cd]
