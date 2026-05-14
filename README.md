@@ -8,9 +8,9 @@ For the full feature list, see the [template README](template/README.md).
 
 If you have an AI coding agent (Claude Code, Cursor, Copilot, etc.), you can create a new project with a prompt like:
 
-> Clone https://github.com/EnigmaCurry/rust-axum-template, then use
-> the included `/create` skill or follow the CLAUDE.md instructions to
-> instantiate a new project.
+> Clone https://github.com/EnigmaCurry/rust-axum-template to a
+> directory named after my new project, then use the included `/create`
+> skill or follow the CLAUDE.md instructions to instantiate it.
 
 ## Manual Setup
 
