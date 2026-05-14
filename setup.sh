@@ -83,8 +83,19 @@ rm -rf template setup.sh
 git remote set-url origin "${GIT_REPOSITORY}.git"
 echo "Set git remote origin to ${GIT_REPOSITORY}.git"
 
-just ${DEPS_TARGET:-deps} build
-just test
+# If running inside nix-shell, native deps (openssl, pkg-config) are already
+# available. Otherwise, if nix is on PATH and shell.nix exists, wrap the build
+# in nix-shell so cargo can find native libraries.
+_build_cmd="just ${DEPS_TARGET:-deps} build && just test"
+
+if [[ -n "${IN_NIX_SHELL:-}" ]]; then
+    eval "$_build_cmd"
+elif command -v nix-shell &>/dev/null && [[ -f "${ROOT_DIR}/shell.nix" ]]; then
+    echo "Detected nix — running build inside nix-shell for native dependencies..."
+    nix-shell "${ROOT_DIR}/shell.nix" --run "$_build_cmd"
+else
+    eval "$_build_cmd"
+fi
 
 git add .
 git add -f .env-dist
