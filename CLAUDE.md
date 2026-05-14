@@ -4,13 +4,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is a Rust project template for building production web servers with Axum. The repo has two layers: the outer `setup.sh` instantiation system and the inner `template/` directory containing the actual application. Most development happens inside `template/`.
+This is a Rust project template for building production web servers with Axum. The repo has two layers:
 
-The template uses `${APP}` as a placeholder variable throughout — it gets replaced by `setup.sh` when instantiating a new project. When working in an instantiated project, `${APP}` will be the actual project name.
+- **Outer layer** — `setup.sh` and the `template/` directory. This is the instantiation system.
+- **Inner layer** — `template/PROJECT/` contains the actual application source. After instantiation, `PROJECT/` is renamed to the app name and `template/` is removed.
+
+The placeholder `${APP}` appears throughout the template and gets replaced with the real app name by `setup.sh`.
+
+## Instantiating a New Project
+
+This is the primary use case for this repo. Run `setup.sh` non-interactively by pre-setting env vars:
+
+```bash
+APP="my-app" GIT_FORGE="github.com" GIT_USERNAME="myuser" bash setup.sh
+```
+
+Or run `./setup.sh` with no env vars for interactive prompts. The script:
+1. Renames `template/PROJECT/` to `template/${APP}/`
+2. Runs `envsubst` to replace `${APP}`, `${GIT_FORGE}`, `${GIT_USERNAME}` in all files
+3. Copies rendered files to the project root
+4. Removes `template/` and `setup.sh`
+5. Runs `just deps build test`
+
+After it completes, commit and push the generated files.
 
 ## Common Commands
 
-All commands run from the `template/` directory (or the project root in an instantiated repo):
+In an instantiated project (or from `template/` when working on the template itself):
 
 ```bash
 just deps                    # Install dev tools (cargo-nextest, git-cliff, cargo-llvm-cov, sqlx-cli)
@@ -31,8 +51,8 @@ Tests always use a temporary SQLite database (via `_with-temp-db` helper in Just
 
 ## Architecture
 
-**Workspace crates** (in `template/`):
-- `PROJECT/` (renamed to `${APP}`) — main binary crate
+**Workspace crates** (paths shown as they appear in `template/`; after instantiation, `PROJECT` becomes the app name):
+- `PROJECT/` — main binary crate
 - `api-doc-macros/` — proc macros for OpenAPI documentation
 - `app-macros/` — proc macros for app utilities
 - `frontend/` — SvelteKit SPA served as static files by the backend
@@ -42,7 +62,7 @@ Tests always use a temporary SQLite database (via `_with-temp-db` helper in Just
 **Configuration** (12-factor, 4-level priority): CLI args > env vars > `~/.local/share/${APP}/defaults.toml` > compiled defaults. Config structs live in `src/config/` with modules for network, database, session, auth, and TLS.
 
 **Key patterns**:
-- `AppState` (in `server.rs`) holds `SqlitePool` and `AuthConfig`, shared across handlers
+- `AppState` (in `server.rs`) holds `SqlitePool`, `AuthConfig`, and `shutdown_tx` (broadcast channel for SSE shutdown notifications)
 - Routes use `aide::axum::ApiRouter` for automatic OpenAPI spec generation
 - Middleware stack (Tower-based): `TraceLayer` → `trusted_forwarded_for` → `user_session` → optional OIDC → `csrf_protection` → route-specific layers
 - Three auth methods selectable via config: `UsernamePassword`, `ForwardAuth` (reverse proxy), `Oidc`
@@ -52,10 +72,12 @@ Tests always use a temporary SQLite database (via `_with-temp-db` helper in Just
 - Sessions: SQLite-backed via `tower-sessions` with background expired-session cleanup
 - Templates: Askama (Jinja-like) in `PROJECT/templates/`
 - API responses wrapped in `ApiResponse<T>` envelope (see `response.rs`)
+- SSE endpoint at `/api/events` with shutdown broadcast and 30s keep-alive; server forces exit after 2s deadline to avoid SSE connections blocking shutdown
 - Frontend SPA: SvelteKit static build served as fallback route (`/*`)
 
 **Route structure** (in `src/routes/mod.rs`):
 - `/api/*` — REST API (CSRF protected)
+- `/api/events` — SSE stream (outside CSRF, GET-only)
 - `/login/*` — Auth endpoints (CSRF protected)
 - `/admin/*` — Admin interface (requires Admin role + CSRF)
 - `/docs/*` — OpenAPI docs (Scalar/Redoc/Swagger)
@@ -63,6 +85,8 @@ Tests always use a temporary SQLite database (via `_with-temp-db` helper in Just
 - `/*` — SvelteKit SPA fallback
 
 ## Release Process
+
+For instantiated projects:
 
 ```bash
 just bump-version   # Creates release-vX.X.X branch with version updates
@@ -72,17 +96,9 @@ git checkout master && git pull
 just release        # Tags and pushes, triggers GitHub Actions (builds binaries + Docker images)
 ```
 
-## Template System
+## Merging Changes Back to the Template
 
-`setup.sh` instantiates the template by replacing `${APP}`, `${GIT_FORGE}`, `${GIT_USERNAME}` via `envsubst`. Run it non-interactively by pre-setting all three env vars:
-
-```bash
-APP="my-app" GIT_FORGE="github.com" GIT_USERNAME="myuser" bash setup.sh
-```
-
-This will render the template, build the frontend, compile the binary, and run tests. After it completes, the `template/` directory and `setup.sh` are removed, leaving a ready-to-use project.
-
-To merge changes back upstream to the template repo:
+From an instantiated project, to push customizations back upstream:
 
 ```bash
 just merge-template-upstream  # Reverses variable substitution and stages changes in ../rust-axum-template
