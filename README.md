@@ -6,13 +6,11 @@ For the full feature list, see the [template README](template/README.md).
 
 ## Quick Start with an AI Agent
 
-If you have an AI coding agent that supports tool use (Claude Code, Cursor, Copilot, etc.), you can create a new project with a single prompt:
+If you have an AI coding agent (Claude Code, Cursor, Copilot, etc.), you can create a new project with a prompt like:
 
-> Clone https://github.com/EnigmaCurry/rust-axum-template and run
-> `setup.sh` non-interactively to create a new project called `my-app`
-> with `GIT_FORGE=github.com` and `GIT_USERNAME=myuser`.
-
-The template includes a [CLAUDE.md](CLAUDE.md) with project context and slash command skills (`/create`, `/dev`, `/pr`, `/merge`, etc.) for agents that support them.
+> Create a new Rust Axum project called `my-app` using the template at
+> https://github.com/EnigmaCurry/rust-axum-template — use the `/create`
+> skill if available, otherwise follow the CLAUDE.md instructions.
 
 ## Manual Setup
 
