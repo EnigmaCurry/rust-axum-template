@@ -12,6 +12,16 @@ debug_var ROOT_DIR
 
 check_deps cargo just pnpm envsubst sed
 
+# Verify we have GNU envsubst (supports SHELL-FORMAT allowlist).
+# The Go-based a8m/envsubst ignores the allowlist and corrupts template files.
+if ! envsubst --help 2>&1 | grep -q SHELL-FORMAT; then
+    echo "ERROR: envsubst on PATH is not GNU gettext envsubst."
+    echo "The Go-based envsubst (a8m/envsubst) does not support SHELL-FORMAT"
+    echo "and will corrupt template files. Install GNU gettext instead."
+    echo "  Nix: use 'gettext' package, not 'envsubst'"
+    exit 1
+fi
+
 # Non-interactive mode: if APP, GIT_FORGE, and GIT_USERNAME are all set,
 # skip prompts and confirmation. Set NONINTERACTIVE=1 to also skip the
 # final confirmation automatically.
@@ -70,6 +80,11 @@ while IFS= read -r -d '' file; do
 
     # Create destination directory if it doesn't exist
     mkdir -p "$(dirname "$DEST_PATH")"
+
+    # Remove any existing symlink at destination (otherwise > follows the
+    # symlink and overwrites the source file, leaving a dangling link after
+    # rm -rf template)
+    [[ -L "$DEST_PATH" ]] && rm -f "$DEST_PATH"
 
     # Replace variables using envsubst and copy the file
     envsubst '${APP} ${APP_PREFIX} ${APP_MODULE} ${GIT_FORGE} ${GIT_USERNAME} ${GIT_REPOSITORY}' < "$file" > "$DEST_PATH"

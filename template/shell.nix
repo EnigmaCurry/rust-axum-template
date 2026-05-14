@@ -5,7 +5,7 @@ pkgs.mkShell {
     nodejs
     pnpm
     just
-    envsubst
+    gettext  # provides GNU envsubst (not the Go a8m/envsubst which ignores SHELL-FORMAT)
     cargo-binstall
     pkg-config
     openssl
