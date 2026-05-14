@@ -79,6 +79,10 @@ done < <(find "$TEMPLATE_DIR" -type f -print0)
 echo "Template render complete!"
 rm -rf template setup.sh
 
+# Point origin at the new project's repository
+git remote set-url origin "${GIT_REPOSITORY}.git"
+echo "Set git remote origin to ${GIT_REPOSITORY}.git"
+
 just deps build
 just test
 
