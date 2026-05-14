@@ -1,79 +1,68 @@
 # rust-axum-template
 
-This is my [Axum](https://github.com/tokio-rs/axum) server template for new
-Rust web projects.
+An [Axum](https://github.com/tokio-rs/axum) server template for new Rust web projects. Includes SQLite, TLS (ACME/self-signed), OpenAPI docs, multiple auth backends, SvelteKit frontend, and GitHub Actions CI/CD.
 
-This is ALPHA software in-development.
+For the full feature list, see the [template README](template/README.md).
 
-## Features
+## Quick Start with an AI Agent
 
-For the full list of features, see the embedded
-[README.md](template/README.md) inside the template.
+If you have an AI coding agent that supports tool use (Claude Code, Cursor, Copilot, etc.), you can create a new project with a single prompt:
 
-## How to use this template
+> Clone https://github.com/EnigmaCurry/rust-axum-template and run
+> `setup.sh` non-interactively to create a new project called `my-app`
+> with `GIT_FORGE=github.com` and `GIT_USERNAME=myuser`.
+
+The template includes a [CLAUDE.md](CLAUDE.md) with project context and slash command skills (`/create`, `/dev`, `/pr`, `/merge`, etc.) for agents that support them.
+
+## Manual Setup
+
+### Prerequisites
+
+ * [Rust](https://rustup.rs/) (via rustup)
+ * [Just](https://github.com/casey/just?tab=readme-ov-file#packages) (`cargo install just`)
+ * [pnpm](https://pnpm.io/installation) (for the SvelteKit frontend)
+ * `envsubst` (e.g., `sudo apt install gettext`)
+
+### Create from GitHub template
 
  * [Create a new repository using this template](https://github.com/new?template_name=rust-axum-template&template_owner=EnigmaCurry).
- * The `Repository name` that you choose will also become the name of
-   your new app.
- * Go to the GitHub repository `Settings` page:
-   * Find `Pages`.
-   * Find `Build and deployment`.
-   * Find `Source` and set it to `GitHub Actions`. (**Not** `Deploy
-     from a branch`)
+ * The repository name you choose will become your app name.
+ * In your repo's Settings > Pages > Source, set it to **GitHub Actions**.
 
-## On your workstation ...
+### Clone and render
 
- * Clone your new repository.
- * Install Rust with [rustup](https://rustup.rs/).
- * Install
-     [Just](https://github.com/casey/just?tab=readme-ov-file#packages).
-     (You can run `cargo install just`.)
- * Install [pnpm](https://pnpm.io/installation) (to build SvelteKit
-   frontend SPA).
- * Install `envsubst`. (e.g., `sudo apt install gettext`)
-
-### Render the template
-
-After cloning the repository to your workstation, you must initialize
- it. Run `setup.sh`:
-
-```
+```bash
+git clone <your-new-repo-url>
+cd <your-app-name>
 ./setup.sh
 ```
 
-Read the interactive prompts and enter the following information:
+The script will prompt for:
 
- * `GIT_FORGE` - enter your Git host's domain name (e.g.,
-   `github.com`).
- * `APP` - enter your new application's name. Use alphanumeric
-   characters with dashes. No spaces.
- * `GIT_USERNAME` - enter the Git forge username or the organization
-   name that should host this repository.
+ * **GIT_FORGE** — your git host domain (default: `github.com`)
+ * **APP** — application name (alphanumeric with dashes, no spaces)
+ * **GIT_USERNAME** — git forge username or org name
 
-This will render the template files into the project root and then
-self-destruct this README.md and the template.
+It renders the template, builds the frontend, compiles the binary, and runs tests.
 
-Cargo will build and run the initial tests.
+You can also run it non-interactively:
 
-### Commit the initial app source files
-
-Once you've verified that the tests ran correctly, you can add all of
-the files that the template generated, as well as the `Cargo.lock`
-file, into the git repository. Commit and push your changes:
-
+```bash
+APP="my-app" GIT_FORGE="github.com" GIT_USERNAME="myuser" ./setup.sh
 ```
-## For example:
 
+## After Setup
+
+Once the build and tests pass, commit the generated files:
+
+```bash
 git add .
 git commit -m "init"
 git push
 ```
 
-You're now ready to start developing your application.
+Run `just run help` to see available commands, or `just serve` to start the server.
 
-## Releasing your app
+## Development & Releases
 
-See [DEVELOPMENT.md](template/DEVELOPMENT.md) for instructions on the
-release process, a copy of this file has been included in your new git
-repository's root.
- 
+See [DEVELOPMENT.md](template/DEVELOPMENT.md) for testing, linting, and the release process.
