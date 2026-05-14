@@ -74,9 +74,22 @@ just release        # Tags and pushes, triggers GitHub Actions (builds binaries 
 
 ## Template System
 
-`setup.sh` instantiates the template by replacing `${APP}`, `${GIT_FORGE}`, `${GIT_USERNAME}` via `envsubst`. To merge changes back upstream to the template repo:
+`setup.sh` instantiates the template by replacing `${APP}`, `${GIT_FORGE}`, `${GIT_USERNAME}` via `envsubst`. It supports non-interactive mode when all three env vars are pre-set. To merge changes back upstream to the template repo:
 
 ```bash
 just merge-template-upstream  # Reverses variable substitution and stages changes in ../rust-axum-template
 just new-template-branch      # Test template changes in an orphan branch
 ```
+
+## Claude Skills
+
+Slash commands available in Claude Code:
+
+- `/create` — Instantiate the template into a new project (prompts for app name, git config, template repo/branch, and location)
+- `/dev` — Switch to the `dev` branch, creating or resetting it from `master` as needed
+- `/master` — Checkout `master` and pull latest changes
+- `/issue` — Create a GitHub issue from a description or conversation context
+- `/pr` — Push `dev` and create a PR to `master` (auto-generates title/body from commits)
+- `/pr-draft` — Same as `/pr` but creates a draft PR
+- `/merge` — Squash-merge the open PR, pull `master`, and clean up `dev`
+- `/status` — Show current branch, working tree status, and any open PRs
