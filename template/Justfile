@@ -1,6 +1,7 @@
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 set export
 
+PATH := env_var("HOME") / ".cargo/bin:" + env_var("PATH")
 FUNCS_SCRIPT := "./_scripts/funcs.sh"
 ROOT := justfile_directory()
 RUST_LOG        := env_var_or_default("RUST_LOG", "warn")
