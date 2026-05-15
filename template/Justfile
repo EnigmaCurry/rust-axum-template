@@ -319,21 +319,35 @@ dev-agent *args:
     #!/usr/bin/env bash
     set -euo pipefail
     PORT="${NET_LISTEN_PORT:-3000}"
+    LOGFILE="target/dev-agent.log"
+    mkdir -p target
     PID=$(pgrep -x "{{APP}}" || true)
     if curl -sf "http://127.0.0.1:${PORT}/" > /dev/null 2>&1 && [[ -n "$PID" ]]; then
         echo "Server already running (PID $PID) — restarting..."
         kill "$PID"
         sleep 1
     fi
-    nohup just run serve {{args}} > /dev/null 2>&1 &
-    for i in $(seq 1 10); do
+    nohup just run serve {{args}} > "$LOGFILE" 2>&1 &
+    BUILD_PID=$!
+    echo "Build/server log: $LOGFILE (PID $BUILD_PID)"
+    for i in $(seq 1 120); do
         if curl -sf "http://127.0.0.1:${PORT}/" > /dev/null 2>&1; then
             echo "Server is up on port ${PORT}"
+            if command -v xdg-open > /dev/null 2>&1; then
+                xdg-open "http://127.0.0.1:${PORT}/" > /dev/null 2>&1 &
+            fi
             exit 0
+        fi
+        # Check if the background process died (build failure)
+        if ! kill -0 "$BUILD_PID" 2>/dev/null && ! pgrep -x "{{APP}}" > /dev/null 2>/dev/null; then
+            echo "Build/server process exited — last 20 lines of log:"
+            tail -20 "$LOGFILE"
+            exit 1
         fi
         sleep 1
     done
-    echo "Server not responding on port ${PORT} after 10s"
+    echo "Server not responding on port ${PORT} after 120s — last 20 lines of log:"
+    tail -20 "$LOGFILE"
     exit 1
 
 # Stop running dev server
