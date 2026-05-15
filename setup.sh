@@ -40,7 +40,7 @@ if [[ "${NONINTERACTIVE:-}" != "1" ]]; then
 
     _DEFAULT_USERNAME="$(
             git remote get-url origin 2>/dev/null |
-              sed -E 's/^(https:\/\/|git@github\.com:)([^\/]+).*$/\2/')"
+              sed -E 's/^(https?:\/\/[^\/]+\/|git@[^:]+:)([^\/]+).*$/\2/')"
     _DEFAULT_USERNAME="${_DEFAULT_USERNAME,,}"
     echo
     ask_no_blank "Enter your Git forge username or org name" GIT_USERNAME "${GIT_USERNAME:-${_DEFAULT_USERNAME}}"
