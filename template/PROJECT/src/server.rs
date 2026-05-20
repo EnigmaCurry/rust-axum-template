@@ -12,13 +12,14 @@ use crate::{
         generate::{
             ensure_rustls_crypto_provider, load_or_generate_self_signed, renew_self_signed_loop,
         },
+        http_redirect::HttpRedirectAcceptor,
         self_signed_cache::{delete_cached_pair, read_private_tls_file, read_tls_file},
     },
     util::write_files::{atomic_write_file_0600, create_private_dir_all_0700},
 };
 use anyhow::Context;
 use axum::http::Uri;
-use axum_server::{Handle, tls_rustls::RustlsConfig};
+use axum_server::{Handle, accept::DefaultAcceptor, tls_rustls::{RustlsAcceptor, RustlsConfig}};
 use futures_util::StreamExt;
 use rustls::ServerConfig as RustlsServerConfig;
 use sqlx::{ConnectOptions, SqlitePool, sqlite::SqliteConnectOptions};
@@ -348,8 +349,12 @@ async fn serve_rustls_files(
 
     info!("listening on https://{addr}");
 
+    let acceptor = RustlsAcceptor::new(rustls_config)
+        .acceptor(HttpRedirectAcceptor::new(DefaultAcceptor::new(), addr.port()));
+
     serve_with_handle(addr, deletion_abort, shutdown_tx, |handle| {
-        axum_server::bind_rustls(addr, rustls_config)
+        axum_server::bind(addr)
+            .acceptor(acceptor)
             .handle(handle)
             .serve(app.into_make_service_with_connect_info::<SocketAddr>())
     })
@@ -398,7 +403,8 @@ async fn serve_acme_tls_alpn01(
         .with_no_client_auth()
         .with_cert_resolver(state.resolver());
 
-    let acceptor = state.axum_acceptor(Arc::new(rustls_config));
+    let acme_acceptor = state.axum_acceptor(Arc::new(rustls_config));
+    let acceptor = HttpRedirectAcceptor::new(acme_acceptor, addr.port());
 
     tokio::spawn(async move {
         while let Some(res) = state.next().await {
@@ -456,8 +462,12 @@ async fn serve_acme_dns01(
 
     info!("listening on https://{addr} (ACME dns-01)");
 
+    let acceptor = RustlsAcceptor::new(rustls_config)
+        .acceptor(HttpRedirectAcceptor::new(DefaultAcceptor::new(), addr.port()));
+
     serve_with_handle(addr, deletion_abort, shutdown_tx, |handle| {
-        axum_server::bind_rustls(addr, rustls_config)
+        axum_server::bind(addr)
+            .acceptor(acceptor)
             .handle(handle)
             .serve(app.into_make_service_with_connect_info::<SocketAddr>())
     })
@@ -548,8 +558,12 @@ async fn serve_self_signed(
 
     info!("listening on https://{addr} (self-signed)");
 
+    let acceptor = RustlsAcceptor::new(rustls_config)
+        .acceptor(HttpRedirectAcceptor::new(DefaultAcceptor::new(), addr.port()));
+
     serve_with_handle(addr, deletion_abort, shutdown_tx, |handle| {
-        axum_server::bind_rustls(addr, rustls_config)
+        axum_server::bind(addr)
+            .acceptor(acceptor)
             .handle(handle)
             .serve(app.into_make_service_with_connect_info::<SocketAddr>())
     })
