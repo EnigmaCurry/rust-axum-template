@@ -3,7 +3,7 @@ use std::{fmt, io::Write, path::PathBuf, str::FromStr};
 
 use crate::{config::default_root_dir, errors::CliError};
 
-use super::{AcmeDnsRegisterConfig, ServeConfig};
+use super::{AcmeDnsRegisterConfig, ServeConfig, SetPasswordConfig};
 use conf::{Conf, Subcommands, anstyle::AnsiColor, completion::Shell};
 use serde::{Deserialize, Serialize};
 
@@ -67,6 +67,7 @@ impl Cli {
             Commands::Completions(_) => Ok(()),
             Commands::Config(_) => Ok(()),
             Commands::Sql(_) => Ok(()),
+            Commands::SetPassword(_) => Ok(()),
         }
     }
 }
@@ -99,6 +100,14 @@ pub enum Commands {
 
     /// Run SQLite shell with the application's database loaded
     Sql(ServeConfig),
+
+    /// Set a local login password for an account.
+    ///
+    /// Required before `serve --auth-method=username_password` can be used:
+    /// the root user is created without a password. Reads the password from a
+    /// hidden prompt, or from stdin when piped, so it never lands in shell
+    /// history.
+    SetPassword(SetPasswordConfig),
 }
 
 pub(crate) fn write_conf_error<W1: Write, W2: Write>(e: &conf::Error, out: &mut W1, err: &mut W2) {
@@ -133,7 +142,14 @@ where
     I: IntoIterator<Item = OsString>,
 {
     // Keep this list in sync with your Commands enum variants.
-    const SUBCOMMANDS: &[&str] = &["serve", "config", "acme-dns-register", "completions"];
+    const SUBCOMMANDS: &[&str] = &[
+        "serve",
+        "config",
+        "acme-dns-register",
+        "completions",
+        "sql",
+        "set-password",
+    ];
 
     let mut it = args.into_iter();
 

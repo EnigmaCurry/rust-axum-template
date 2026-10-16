@@ -11,6 +11,8 @@ pub mod network;
 pub use network::NetworkConfig;
 pub mod serve;
 pub use serve::ServeConfig;
+pub mod set_password;
+pub use set_password::SetPasswordConfig;
 pub mod session;
 pub use session::SessionConfig;
 pub mod tls;

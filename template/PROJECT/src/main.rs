@@ -166,6 +166,10 @@ where
             commands::acme_dns_register(args, cli.root_dir.clone().0, out, _err)
         }
         Commands::Sql(args) => commands::sql(args, cli.root_dir.clone().0, out, _err),
+        Commands::SetPassword(args) => {
+            let root_dir = ensure_root_dir(cli.root_dir.clone().0)?;
+            commands::set_password(args, root_dir, out, _err)
+        }
     }
 }
 
