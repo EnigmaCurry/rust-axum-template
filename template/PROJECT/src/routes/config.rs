@@ -1,18 +1,16 @@
-use std::collections::BTreeMap;
 
-use aide::{NoApi, axum::ApiRouter};
+use aide::axum::ApiRouter;
 use api_doc_macros::{api_doc, get_with_docs};
 use axum::{
     Json,
-    extract::{OriginalUri, Request, State},
-    http::header::{HOST, USER_AGENT},
+    extract::State,
 };
 use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::{
     errors::ErrorBody,
-    middleware::{auth::AuthenticationMethod, user_session::UserSession},
+    middleware::auth::AuthenticationMethod,
     prelude::*,
     response::{ApiJson, ApiResponse, json_ok},
 };

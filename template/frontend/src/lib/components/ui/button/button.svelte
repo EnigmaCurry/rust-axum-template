@@ -33,6 +33,23 @@
 </script>
 
 <script>
+	/**
+	 * Without this, `$props()` infers `class` as required and `variant`/`size`
+	 * as plain strings, which both reports false errors in every caller and
+	 * fails to catch a misspelled variant here.
+	 *
+	 * @type {{
+	 *   class?: string,
+	 *   variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link",
+	 *   size?: "default" | "sm" | "lg" | "icon" | "icon-sm" | "icon-lg",
+	 *   ref?: HTMLElement | null,
+	 *   href?: string,
+	 *   type?: "button" | "submit" | "reset",
+	 *   disabled?: boolean,
+	 *   children?: import("svelte").Snippet,
+	 *   [key: string]: any,
+	 * }}
+	 */
 	let {
 		class: className,
 		variant = "default",

@@ -1,20 +1,18 @@
 use std::{
     net::{IpAddr, SocketAddr},
     path::{Path, PathBuf},
-    str::FromStr,
 };
 
 use crate::{
     config::{AppConfig, AuthConfig, TlsAcmeChallenge, TlsMode, database::build_db_url},
     ensure_root_dir,
     errors::CliError,
-    middleware::{self, auth::AuthenticationMethod, oidc::build_oidc_auth_layer},
+    middleware::{self, auth::AuthenticationMethod},
     server,
     util::write_files::create_private_dir_all_0700_sync,
 };
 use anyhow::Context;
-use axum::http::{HeaderName, Uri};
-use axum_oidc::{EmptyAdditionalClaims, OidcAuthLayer};
+use axum::http::HeaderName;
 use tracing::{debug, error, info, warn};
 
 static TLS_CACHE_DIR: &str = "tls-cache";

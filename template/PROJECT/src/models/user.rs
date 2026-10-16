@@ -8,7 +8,7 @@ use sqlx::types::chrono::NaiveDateTime;
 use sqlx::{Error, FromRow, SqlitePool};
 use tracing::{debug, info};
 
-use super::identity_provider::{self, IdentityProviders};
+use super::identity_provider::IdentityProviders;
 
 #[derive(Debug, Clone, FromRow)]
 pub struct User {

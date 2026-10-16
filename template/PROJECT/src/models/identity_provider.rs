@@ -4,7 +4,7 @@ use crate::models::ids::IdentityProviderId;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use strum_macros::{AsRefStr, EnumString};
+use strum_macros::EnumString;
 
 #[derive(Debug, Clone, FromRow)]
 pub struct IdentityProvider {
