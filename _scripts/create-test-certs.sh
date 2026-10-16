@@ -12,7 +12,7 @@ SAN_DNS="${SAN_DNS:-$SERVER_CN}"
 SAN_IP="${SAN_IP:-127.0.0.1}"
 
 # ---- Output temp dir ----
-OUTDIR="/tmp/axum-dev-test-certs"
+OUTDIR="/tmp/${APP:-app}-test-certs"
 rm -rf "${OUTDIR}"
 mkdir "${OUTDIR}"
 chmod 700 "$OUTDIR"
@@ -130,6 +130,13 @@ openssl x509 -in "$SERVER_CERT" -noout -ext subjectAltName
 # debug:
 echo
 echo "## Set the following vars in your shell:"
-echo 'export AXUM_DEV_TLS_MODE=manual'
-printf 'export AXUM_DEV_TLS_CERT_PATH=%q\n' "$FULLCHAIN"
-printf 'export AXUM_DEV_TLS_KEY_PATH=%q\n'  "$SERVER_KEY"
+# The app reads <APP_PREFIX>_* vars; the Justfile exports APP, so derive the
+# prefix rather than hardcoding a name this shared script cannot know.
+PREFIX="${APP:-}"
+if [[ -n "$PREFIX" ]]; then
+  PREFIX="${PREFIX^^}"
+  PREFIX="${PREFIX//[ -]/_}_"
+fi
+printf 'export %sTLS_MODE=manual\n' "$PREFIX"
+printf 'export %sTLS_CERT=%q\n' "$PREFIX" "$FULLCHAIN"
+printf 'export %sTLS_KEY=%q\n'  "$PREFIX" "$SERVER_KEY"
