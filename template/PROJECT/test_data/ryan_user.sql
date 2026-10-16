@@ -9,7 +9,7 @@ SELECT u.id,
 FROM [user] AS u
 JOIN identity_provider AS p
   ON p.id = u.identity_provider_id
-WHERE p.name = 'system'
+WHERE p.name = 'System'   -- seeded with this exact case in 0001_init.sql
   AND u.external_id = 'root'
 ON CONFLICT(user_id) DO NOTHING;
 
