@@ -291,13 +291,6 @@ fresh_template_branch() {
     fi
 
     # -----------------------------------------------------------------
-    # Create a clean orphan branch
-    # -----------------------------------------------------------------
-    exe git checkout --orphan "${NEW_ORPHAN_BRANCH}"
-    exe git rm -rf .
-    exe git clean -fdx >/dev/null
-
-    # -----------------------------------------------------------------
     # Make sure the temporary remote is gone, then add it again
     # -----------------------------------------------------------------
     _clean_tmp_remote
@@ -316,6 +309,17 @@ fresh_template_branch() {
     fi
     # The SHA‑1 we are about to squash
     REMOTE_SHA=$(git rev-parse "${TMP_REMOTE}/${BRANCH}")
+
+    # -----------------------------------------------------------------
+    # Create a clean orphan branch.
+    #
+    # Everything above this point is non-destructive on purpose: this wipes
+    # the working tree including ignored files, so a bad remote or an
+    # unreachable network must fail before we get here, not after.
+    # -----------------------------------------------------------------
+    exe git checkout --orphan "${NEW_ORPHAN_BRANCH}"
+    exe git rm -rf .
+    exe git clean -fdx >/dev/null
 
     # -----------------------------------------------------------------
     # Bring the remote snapshot into the empty work‑tree
