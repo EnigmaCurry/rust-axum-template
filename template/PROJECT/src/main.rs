@@ -114,6 +114,7 @@ where
             let app_cfg: AppConfig = serve_cfg.app;
             app_cfg.tls.validate_with_root(&root_dir)?;
             app_cfg.auth.validate()?;
+            config::env_bool::validate()?;
 
             // Print the effective config as TOML
             let rendered = toml::to_string_pretty(&app_cfg).map_err(|e| {
@@ -159,6 +160,7 @@ where
 
             app_cfg.tls.validate_with_root(&root_dir)?;
             app_cfg.auth.validate()?;
+            config::env_bool::validate()?;
 
             commands::serve(app_cfg, root_dir)
         }

@@ -5,6 +5,7 @@ pub use auth::AuthConfig;
 pub mod cli;
 use cli::write_conf_error;
 pub use cli::{Cli, Commands};
+pub mod env_bool;
 pub mod database;
 pub use database::DatabaseConfig;
 pub mod network;
