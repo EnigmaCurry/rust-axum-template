@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
   import LoginOidc from "$lib/components/login_oidc.svelte";
   import LoginForm from "$lib/components/login_form.svelte";
   import * as Card from "$lib/components/ui/card/index.js";
@@ -16,6 +17,24 @@
     if (s === "oidc") return "oidc";
     if (s === "username_password") return "username_password";
     return null;
+  }
+
+  /// Already signed in? There is nothing to do on this page.
+  ///
+  /// Without this, landing on /login with a live session renders a card with
+  /// no way forward — which is also what happens after the OIDC round trip.
+  async function redirectIfSignedIn() {
+    try {
+      const res = await fetch("/api/whoami", { credentials: "include" });
+      const json = await res.json().catch(() => null);
+      if (json?.data?.session?.is_logged_in) {
+        goto("/", { replaceState: true });
+        return true;
+      }
+    } catch {
+      // Fall through to the form; it reports its own errors.
+    }
+    return false;
   }
 
   async function loadConfig() {
@@ -59,7 +78,10 @@
     }
   }
 
-  onMount(loadConfig);
+  onMount(async () => {
+    if (await redirectIfSignedIn()) return;
+    await loadConfig();
+  });
 </script>
 
 <div class="flex h-screen w-full items-center justify-center px-4">
@@ -90,6 +112,11 @@
   {:else if authMethod === "oidc"}
     <LoginOidc id="login" loginAction="/api/login" logoutAction="/api/logout" />
   {:else}
-    <LoginForm id="login" loginAction="/api/login" logoutAction="/api/logout" />
+    <LoginForm
+      id="login"
+      loginAction="/api/login"
+      logoutAction="/api/logout"
+      onlogin={() => goto("/", { replaceState: true })}
+    />
   {/if}
 </div>
