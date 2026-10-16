@@ -101,7 +101,7 @@ jobs:
 
       - name: Configure .env file
         working-directory: ${{ env.PROJECT_DIR }}
-        run: just config
+        run: just _env_init
 
       - name: Run coverage report
         working-directory: ${{ env.PROJECT_DIR }}
