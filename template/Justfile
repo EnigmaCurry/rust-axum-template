@@ -288,8 +288,8 @@ serve-docker-plain: build-docker
 # Apply database migrations in local database
 migrate:
     cd {{PROJECT_DIR}} && \
-    mkdir -p "$(dirname {{DATABASE_PATH}})" && \
-    export DATABASE_URL="sqlite://{{DATABASE_PATH}}" && \
+    export DATABASE_URL="${DATABASE_URL:-sqlite://{{DATABASE_PATH}}}" && \
+    mkdir -p "$(dirname "${DATABASE_URL#sqlite://}")" && \
     sqlx database create && \
     sqlx migrate run
 
