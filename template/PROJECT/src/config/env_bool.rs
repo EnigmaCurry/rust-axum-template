@@ -1,8 +1,8 @@
 //! Reject boolean environment variables that are neither true nor false.
 //!
-//! The config parser treats any value it does not recognise as `true`, so a
-//! typo in a security-relevant setting silently turns the dangerous direction
-//! on:
+//! The config parser treats any value it does not recognise as `true` for a
+//! plain `bool` field, so a typo in a security-relevant setting silently turns
+//! the dangerous direction on:
 //!
 //! ```text
 //! $ ${APP_PREFIX}AUTH_TRUSTED_FORWARDED_FOR=flase app config
@@ -24,6 +24,11 @@ pub const ENV_PREFIX: &str = "${APP_PREFIX}";
 /// Keep this in sync with the `bool` and `Option<bool>` fields in this module's
 /// siblings. A missing entry is not a crash, just a setting that keeps the old
 /// fail-open behaviour.
+///
+/// Only plain `bool` fields actually need this. An `Option<bool>` is parsed
+/// strictly by `conf` already — `SESSION_SECURE=flase` fails with "Invalid
+/// value" before this runs — but it is listed anyway, so that changing a
+/// field's type cannot quietly reintroduce the hole.
 const BOOLEAN_SETTINGS: &[&str] = &[
     "AUTH_TRUSTED_FORWARDED_FOR",
     "SESSION_SECURE",
