@@ -24,7 +24,11 @@ impl ApiResponse<()> {
         }
     }
 
-    /// Error envelope only (no status)
+    /// Error envelope only (no status).
+    ///
+    /// Unused by the template itself; kept for apps that build an error body
+    /// without a status code.
+    #[allow(dead_code)]
     pub fn error(msg: impl Into<String>) -> Self {
         Self {
             error: Some(msg.into()),

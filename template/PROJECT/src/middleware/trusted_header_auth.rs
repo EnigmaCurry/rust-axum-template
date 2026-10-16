@@ -34,6 +34,9 @@ impl ForwardAuthConfig {
         }
     }
 
+    /// Duplicated by `AuthConfig::validate`, which is what `main` calls; kept
+    /// here so the middleware config can be validated on its own.
+    #[allow(dead_code)]
     pub fn validate(&self) -> Result<(), CliError> {
         if matches!(self.method, AuthenticationMethod::ForwardAuth) && self.trusted_proxy.is_none()
         {

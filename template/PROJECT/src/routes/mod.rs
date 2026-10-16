@@ -1,13 +1,12 @@
 use aide::{axum::ApiRouter, openapi::OpenApi};
 use axum::response::IntoResponse;
 use axum::{
-    Extension, Router, error_handling::HandleErrorLayer, http::StatusCode, middleware, routing::get,
+    Extension, error_handling::HandleErrorLayer, http::StatusCode, middleware, routing::get,
 };
-use axum_oidc::{EmptyAdditionalClaims, OidcAuthLayer, OidcLoginLayer, error::MiddlewareError};
+use axum_oidc::{EmptyAdditionalClaims, OidcAuthLayer, error::MiddlewareError};
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::{services::ServeDir, trace::TraceLayer};
-use tracing::warn;
 
 use crate::middleware::require_role::RequireRoles;
 use crate::models::role::SystemRole;

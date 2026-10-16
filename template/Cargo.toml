@@ -5,3 +5,8 @@ members = [
   "api-doc-macros",
   "app-macros"
 ]
+
+# Profiles only take effect at the workspace root; cargo ignores them in a
+# member package and says so on every build.
+[profile.release]
+strip = "symbols"

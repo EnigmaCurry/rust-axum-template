@@ -1,22 +1,17 @@
 use aide::{NoApi, axum::ApiRouter};
 use api_doc_macros::{api_doc, get_with_docs, post_with_docs};
-use axum::{Json, extract::State, http::StatusCode, middleware};
-use axum_oidc::{EmptyAdditionalClaims, OidcClaims};
+use axum::{Json, http::StatusCode};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     AppState,
     errors::ErrorBody,
-    middleware::{
-        require_role::{RequireRoles, require_roles_middleware},
-        user_session::UserSession,
-    },
-    models::role::SystemRole,
+    middleware::user_session::UserSession,
     response::{ApiJson, ApiResponse, json_error, json_ok},
 };
 
-pub fn router(state: AppState) -> ApiRouter<AppState> {
+pub fn router(_state: AppState) -> ApiRouter<AppState> {
     ApiRouter::<AppState>::new()
         .api_route("/", post_with_docs!(formal_greeting))
         .api_route("/", get_with_docs!(hello))

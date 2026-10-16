@@ -1,9 +1,7 @@
-use axum::{error_handling::HandleErrorLayer, http::Uri};
-use axum_oidc::{EmptyAdditionalClaims, OidcAuthLayer, OidcLoginLayer, error::MiddlewareError};
+use axum::http::Uri;
+use axum_oidc::{EmptyAdditionalClaims, OidcAuthLayer};
 use std::str::FromStr;
-use tower::{ServiceBuilder, layer::util::Stack};
 
-use axum::response::IntoResponse;
 
 use crate::errors::CliError;
 

@@ -18,7 +18,6 @@ use crate::{
     util::write_files::{atomic_write_file_0600, create_private_dir_all_0700},
 };
 use anyhow::Context;
-use axum::http::Uri;
 use axum_server::{Handle, accept::DefaultAcceptor, tls_rustls::{RustlsAcceptor, RustlsConfig}};
 use futures_util::StreamExt;
 use rustls::ServerConfig as RustlsServerConfig;
@@ -31,7 +30,6 @@ use tower_sessions::{
     session_store::ExpiredDeletion,
 };
 use tower_sessions_sqlx_store::SqliteStore;
-use tracing::warn;
 
 #[derive(Clone)]
 pub struct AppState {
