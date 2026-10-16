@@ -1,5 +1,8 @@
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 set export
+# just stopped loading .env by default in 1.0; _env_init already tells the user
+# "dotenv loads on just startup", so make that true.
+set dotenv-load := true
 
 PATH := env_var("HOME") / ".cargo/bin:" + env_var("PATH")
 FUNCS_SCRIPT := "./_scripts/funcs.sh"
@@ -232,7 +235,7 @@ build-docker:
 # Serve the app by itself as a standalone binary
 serve *args:
     cd {{PROJECT_DIR}} && \
-    AUTH_TRUSTED_FORWARDED_FOR=false \
+    ${APP_PREFIX}AUTH_TRUSTED_FORWARDED_FOR=false \
     just run serve {{args}}
 
 # Serve the app in Docker with Traefik and ForwardAuth
@@ -240,24 +243,23 @@ serve-docker: build-docker
     ${DOCKER} run --rm -it \
     --name {{APP}} \
     -v ${DOCKER_VOLUME}:/data \
-    -e AUTH_METHOD=forward_auth
+    -e ${APP_PREFIX}AUTH_METHOD=forward_auth \
     -e RUST_LOG \
     -e RUST_BACKTRACE \
     -e RUST_LIB_BACKTRACE \
-    -e NET_LISTEN_IP \
-    -e NET_LISTEN_PORT \
-    -e AUTH_TRUSTED_PROXY \
-    -e AUTH_TRUSTED_HEADER_NAME \
-    -e AUTH_TRUSTED_FORWARDED_FOR_NAME \
-    -e AUTH_TRUSTED_HEADER_AUTH=true \
-    -e AUTH_TRUSTED_FORWARDED_FOR=true \
-    -e SESSION_EXPIRY_SECONDS \
-    -e SESSION_CHECK_SECONDS \
+    -e ${APP_PREFIX}NET_LISTEN_IP \
+    -e ${APP_PREFIX}NET_LISTEN_PORT \
+    -e ${APP_PREFIX}AUTH_TRUSTED_PROXY \
+    -e ${APP_PREFIX}AUTH_TRUSTED_HEADER_NAME \
+    -e ${APP_PREFIX}AUTH_TRUSTED_FORWARDED_FOR_NAME \
+    -e ${APP_PREFIX}AUTH_TRUSTED_FORWARDED_FOR=true \
+    -e ${APP_PREFIX}SESSION_EXPIRY_SECONDS \
+    -e ${APP_PREFIX}SESSION_CHECK_SECONDS \
     -l traefik.enable=true \
     -l traefik.http.routers.{{APP}}.rule=Host\(\`${APP_HOST}\`\) \
     -l traefik.http.routers.{{APP}}.entrypoints=websecure \
     -l traefik.http.routers.{{APP}}.tls=true \
-    -l traefik.http.services.{{APP}}.loadbalancer.server.port=${NET_LISTEN_PORT} \
+    -l traefik.http.services.{{APP}}.loadbalancer.server.port=${${APP_PREFIX}NET_LISTEN_PORT} \
     -l "traefik.http.routers.{{APP}}-login.rule=Host(\`${APP_HOST}\`) && PathPrefix(\`/login\`)" \
     -l traefik.http.routers.{{APP}}-login.entrypoints=websecure \
     -l traefik.http.routers.{{APP}}-login.tls=true \
@@ -270,17 +272,17 @@ serve-docker-plain: build-docker
     ${DOCKER} run --rm -it \
     --name {{APP}} \
     -v ${DOCKER_VOLUME}:/data \
-    -p ${LISTEN_PORT}:${LISTEN_PORT} \
-    -e AUTH_METHOD=username_password \
-    -e SESSION_SECURE=false \
+    -p ${${APP_PREFIX}NET_LISTEN_PORT}:${${APP_PREFIX}NET_LISTEN_PORT} \
+    -e ${APP_PREFIX}AUTH_METHOD=username_password \
+    -e ${APP_PREFIX}SESSION_SECURE=false \
     -e RUST_LOG \
     -e RUST_BACKTRACE \
     -e RUST_LIB_BACKTRACE \
-    -e NET_LISTEN_IP \
-    -e NET_LISTEN_PORT \
-    -e SESSION_EXPIRY_SECONDS \
-    -e SESSION_CHECK_SECONDS \
-    -e AUTH_TRUSTED_FORWARDED_FOR=false \
+    -e ${APP_PREFIX}NET_LISTEN_IP \
+    -e ${APP_PREFIX}NET_LISTEN_PORT \
+    -e ${APP_PREFIX}SESSION_EXPIRY_SECONDS \
+    -e ${APP_PREFIX}SESSION_CHECK_SECONDS \
+    -e ${APP_PREFIX}AUTH_TRUSTED_FORWARDED_FOR=false \
     ${DOCKER_IMAGE} serve
 
 # Apply database migrations in local database
@@ -318,7 +320,7 @@ dev: migrate insert-test-data serve
 dev-agent *args:
     #!/usr/bin/env bash
     set -euo pipefail
-    PORT="${NET_LISTEN_PORT:-3000}"
+    PORT="${${APP_PREFIX}NET_LISTEN_PORT:-3000}"
     PID=$(pgrep -x "{{APP}}" || true)
     if [[ -n "$PID" ]]; then
         echo "Server already running (PID $PID) — killing it first..."
@@ -334,7 +336,7 @@ dev-agent *args:
 dev-agent-stop:
     #!/usr/bin/env bash
     set -euo pipefail
-    PORT="${NET_LISTEN_PORT:-3000}"
+    PORT="${${APP_PREFIX}NET_LISTEN_PORT:-3000}"
     PID=$(pgrep -x "{{APP}}" || true)
     if [[ -z "$PID" ]]; then
         echo "Server is not running"

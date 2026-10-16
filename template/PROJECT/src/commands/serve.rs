@@ -15,7 +15,7 @@ use crate::{
 use anyhow::Context;
 use axum::http::{HeaderName, Uri};
 use axum_oidc::{EmptyAdditionalClaims, OidcAuthLayer};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 static TLS_CACHE_DIR: &str = "tls-cache";
 
@@ -45,7 +45,7 @@ fn plan_serve(cfg: &AppConfig, root_dir: &Path) -> Result<ServePlan, CliError> {
         forward_auth_cfg,
         forward_for_cfg,
         oidc_cfg,
-        session_secure: true,
+        session_secure: cfg.session.effective_secure(),
         session_expiry_secs: cfg.session.expiry_seconds,
         session_check_secs: cfg.session.check_seconds,
         auth_config: cfg.auth.clone(),
@@ -64,6 +64,17 @@ pub fn serve(cfg: AppConfig, root_dir: PathBuf) -> Result<(), CliError> {
         "Session config: secure={}, expiry_secs={}, check_secs={}",
         plan.session_secure, plan.session_expiry_secs, plan.session_check_secs
     );
+
+    // Secure cookies over plain HTTP are discarded by browsers everywhere
+    // except localhost, and the symptom is a login that returns 200 and then
+    // does nothing — worth naming rather than leaving to be discovered.
+    if plan.session_secure && matches!(cfg.tls.mode, TlsMode::None) {
+        warn!(
+            "session cookies are marked Secure but TLS is off; browsers will \
+             discard them on anything but localhost. Set SESSION_SECURE=false \
+             (with the app's env prefix) for plain HTTP."
+        );
+    }
 
     let rt = create_runtime()?;
     rt.block_on(server::run(
@@ -393,6 +404,7 @@ fn plan_serve_builds_expected_db_url_and_addr() {
         session: crate::config::SessionConfig {
             expiry_seconds: 3600,
             check_seconds: 60,
+            secure: None,
             // ..
         },
         auth: crate::config::AuthConfig {
