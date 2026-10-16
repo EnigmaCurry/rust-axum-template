@@ -10,6 +10,9 @@
     whoami = "/api/whoami",
     loginAction = "/api/login",
     logoutAction = "/api/logout",
+    // Called after a login this form performed, so the route decides where to
+    // go next. Not called when the form merely discovers an existing session.
+    onlogin,
   } = $props();
 
   let username = $state("");
@@ -96,6 +99,7 @@
     await fetchWhoami();
     password = "";
     loading = false;
+    onlogin?.();
   }
 
   async function submitLogout() {
