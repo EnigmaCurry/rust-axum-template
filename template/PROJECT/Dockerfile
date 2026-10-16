@@ -13,7 +13,9 @@ FROM node:22-slim AS frontend-builder
 WORKDIR /frontend
 RUN corepack enable
 
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
+# pnpm-workspace.yaml carries the esbuild build allowance; without it here,
+# pnpm refuses to run esbuild's build script and the install fails.
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY frontend ./
@@ -35,7 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-RUN cargo install --locked sqlx-cli --no-default-features --features sqlite
+RUN cargo install --locked sqlx-cli --version "^0.8" --no-default-features --features sqlite
 
 # ---------- Pre-fetch Rust dependencies for workspace -------------
 COPY Cargo.toml Cargo.lock ./
@@ -120,4 +122,8 @@ ENV ROOT_DIR=/data NET_LISTEN_IP=0.0.0.0 NET_LISTEN_PORT=3000
 USER $USER
 
 # ENTRYPOINT JSON form doesn't expand vars, so use sh -c to exec the chosen binary.
-ENTRYPOINT ["/bin/sh", "-c", "exec /usr/local/bin/$APP_BIN"]
+# The "$@" and the trailing "--" matter: without them, sh -c swallows any command
+# appended by `docker run ... <image> serve`, so the binary starts with no
+# arguments and prints its help instead of serving. The "--" becomes $0, which
+# puts the real arguments in "$@".
+ENTRYPOINT ["/bin/sh", "-c", "exec /usr/local/bin/$APP_BIN \"$@\"", "--"]
