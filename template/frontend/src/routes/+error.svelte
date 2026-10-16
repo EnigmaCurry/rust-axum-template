@@ -20,7 +20,5 @@
     </p>
   </div>
 
-  <Button asChild>
-    <a href="/">Go back home</a>
-  </Button>
+  <Button href="/">Go back home</Button>
 </main>

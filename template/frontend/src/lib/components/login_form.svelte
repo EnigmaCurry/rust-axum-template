@@ -28,6 +28,7 @@
   let loading = $state(false);
   let errorMsg = $state("");
 
+  /** @param {any} json */
   function applyWhoami(json) {
     const session = json?.data?.session;
     csrfToken = typeof session?.csrf_token === "string" ? session.csrf_token : "";
@@ -55,6 +56,7 @@
     return !!csrfToken;
   }
 
+  /** @param {string} url @param {object | null} [bodyObj] */
   async function postJson(url, bodyObj) {
     return fetch(url, {
       method: "POST",
@@ -67,6 +69,7 @@
     });
   }
 
+  /** @param {SubmitEvent} event */
   async function submitLogin(event) {
     event.preventDefault();
     loading = true;

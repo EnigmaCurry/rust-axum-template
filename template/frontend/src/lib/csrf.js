@@ -1,3 +1,4 @@
+/** @param {HTMLElement} node */
 export function csrf(node) {
   const token = document.body.dataset.csrf;
   if (!token) return;

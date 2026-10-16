@@ -1,11 +1,17 @@
-<script>
-	import { cn } from "$lib/utils.js";
+<script lang="ts">
+	import { cn, type WithElementRef } from "$lib/utils.js";
+	import type { Snippet } from "svelte";
+	import type { HTMLAttributes } from "svelte/elements";
+
 	let {
 		ref = $bindable(null),
 		class: className,
 		children,
 		errors,
 		...restProps
+	}: WithElementRef<HTMLAttributes<HTMLDivElement>> & {
+		children?: Snippet;
+		errors?: { message?: string }[];
 	} = $props();
 
 	const hasContent = $derived.by(() => {
@@ -13,7 +19,7 @@
 		if (children) return true;
 
 		// no errors
-		if (!errors) return false;
+		if (!errors || errors.length === 0) return false;
 
 		// has an error but no message
 		if (errors.length === 1 && !errors[0]?.message) {
@@ -40,7 +46,7 @@
 		{:else if singleErrorMessage}
 			{singleErrorMessage}
 		{:else if isMultipleErrors}
-			<ul class="ms-4 flex list-disc flex-col gap-1">
+			<ul class="ml-4 flex list-disc flex-col gap-1">
 				{#each errors ?? [] as error, index (index)}
 					{#if error?.message}
 						<li>{error.message}</li>

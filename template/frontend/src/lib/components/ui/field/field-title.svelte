@@ -1,20 +1,19 @@
-<script>
-	import { cn } from "$lib/utils.js";
+<script lang="ts">
+	import { cn, type WithElementRef } from "$lib/utils.js";
+	import type { HTMLAttributes } from "svelte/elements";
+
 	let {
 		ref = $bindable(null),
 		class: className,
 		children,
 		...restProps
-	} = $props();
+	}: WithElementRef<HTMLAttributes<HTMLDivElement>> = $props();
 </script>
 
 <div
 	bind:this={ref}
 	data-slot="field-title"
-	class={cn(
-		"flex w-fit items-center gap-2 text-sm font-medium leading-snug group-data-[disabled=true]/field:opacity-50",
-		className
-	)}
+	class={cn("gap-2 leading-snug text-sm font-medium group-data-[disabled=true]/field:opacity-50 flex w-fit items-center", className)}
 	{...restProps}
 >
 	{@render children?.()}
