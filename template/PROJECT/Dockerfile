@@ -122,4 +122,8 @@ ENV ROOT_DIR=/data NET_LISTEN_IP=0.0.0.0 NET_LISTEN_PORT=3000
 USER $USER
 
 # ENTRYPOINT JSON form doesn't expand vars, so use sh -c to exec the chosen binary.
-ENTRYPOINT ["/bin/sh", "-c", "exec /usr/local/bin/$APP_BIN"]
+# The "$@" and the trailing "--" matter: without them, sh -c swallows any command
+# appended by `docker run ... <image> serve`, so the binary starts with no
+# arguments and prints its help instead of serving. The "--" becomes $0, which
+# puts the real arguments in "$@".
+ENTRYPOINT ["/bin/sh", "-c", "exec /usr/local/bin/$APP_BIN \"$@\"", "--"]
