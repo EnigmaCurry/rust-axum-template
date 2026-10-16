@@ -116,7 +116,7 @@ fn default_config_header() -> String {
         r#"## Configuration in {bin} is hierarchical:
 ## (From highest priorirty to lowest priority):
 ##  1. Command line arguments (e.g., `{bin} serve --some-setting ...` ).
-##  2. Environment variables (e.g., `export AXUM_DEV_SOME_SETTING=...` ).
+##  2. Environment variables (e.g., `export ${APP_PREFIX}SOME_SETTING=...` ).
 ##  3. Defaults file (this file) - you can change these settings in TOML format.
 ##  4. Compiled builtin defaults - to change these you have to recompile the source code.
 
